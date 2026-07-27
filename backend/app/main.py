@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import FRONTEND_DIST
 from .db import connect, migrate
-from .routers import feed, instructions, pipeline, sources
+from .routers import conversation, feed, instructions, pipeline, sources
 from .seed import seed_defaults
 from .services.profile import ensure_profile
 
@@ -36,6 +36,7 @@ app.include_router(feed.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
 app.include_router(instructions.router, prefix="/api")
 app.include_router(pipeline.router, prefix="/api")
+app.include_router(conversation.router, prefix="/api")
 
 if FRONTEND_DIST.exists():
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

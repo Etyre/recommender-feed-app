@@ -43,7 +43,9 @@ Rating scale: critical (absolutely must have read) > worth_it (worth their time)
 (opened but abandoned partway) — treat it as evidence the piece failed to hold their \
 attention (length, style, or fading interest in the topic) unless the note says \
 otherwise. The notes are the reader's own words about WHY something was or wasn't \
-valuable — weight them heavily and quote them.
+valuable — weight them heavily and quote them. You may also receive excerpts from the \
+reader's conversation with the feed's interview agent — what the reader says there is \
+direct first-person evidence of their preferences, at least as authoritative as ratings.
 
 Output ONLY the markdown document, with exactly these sections:
 # Taste profile
@@ -100,10 +102,18 @@ def maybe_regenerate(conn: sqlite3.Connection, usage: llm.UsageTracker) -> dict:
     )
     if not due:
         return stats
+    convo_rows = conn.execute(
+        "SELECT role, content FROM conversation_messages ORDER BY id DESC LIMIT 40"
+    ).fetchall()
+    convo = "\n".join(
+        f"{'AGENT' if r['role'] == 'agent' else 'READER'}: {r['content'][:500]}"
+        for r in reversed(convo_rows)
+    )
     user = (
         "# Previous profile\n" + latest["content_md"]
         + "\n\n# Ratings (most recent first; current rating per item)\n"
         + (_ratings_dump(conn) or "(none)")
+        + "\n\n# Recent conversation with the reader\n" + (convo or "(none)")
     )
     content = llm.generate_text(
         model=SMART_MODEL,

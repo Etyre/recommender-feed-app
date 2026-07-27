@@ -54,6 +54,57 @@ button:disabled { opacity: 0.5; cursor: default; }
 .tab.active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--accent); border-radius: 0; }
 
 .run-controls { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.tab-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* Chat */
+.chat-messages { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.chat-empty { text-align: center; padding: 30px 0; }
+.bubble {
+  max-width: 85%;
+  border-radius: 12px;
+  padding: 10px 14px;
+  white-space: pre-wrap;
+  font-size: 14.5px;
+}
+.bubble-agent {
+  align-self: flex-start;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.bubble-user {
+  align-self: flex-end;
+  background: #e4ecf9;
+  border: 1px solid #cfdcf2;
+}
+.bubble.thinking { color: var(--muted); font-style: italic; }
+.proposal-chips { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.proposal-chip {
+  text-align: left;
+  font-size: 12.5px;
+  border-radius: 8px;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  background: none;
+  padding: 5px 10px;
+}
+.proposal-chip:disabled { border-style: solid; color: var(--worth); border-color: var(--worth); opacity: 1; }
+.chat-input { display: flex; gap: 8px; align-items: flex-end; }
+.chat-input textarea {
+  flex: 1;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+}
 .run-status { font-size: 12.5px; color: var(--muted); }
 .run-status.running { color: var(--accent); }
 .run-status.partial, .run-status.error { color: var(--critical); }

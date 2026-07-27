@@ -55,6 +55,14 @@ export interface Instruction {
   agent_status_note: string | null;
 }
 
+export interface ChatMessage {
+  id: number;
+  role: "agent" | "user";
+  content: string;
+  created_at: string;
+  proposals: { text: string; kind: string }[];
+}
+
 export interface DailyUsage {
   day: string; // YYYY-MM-DD (local)
   runs: number;

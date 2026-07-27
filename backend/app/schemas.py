@@ -59,6 +59,16 @@ class QuestUpdate(BaseModel):
     note: str = ""
 
 
+class ProposedInstruction(BaseModel):
+    text: str
+    kind: str  # 'quest' | 'standing'
+
+
+class InterviewTurn(BaseModel):
+    reply: str
+    proposed_instructions: list[ProposedInstruction] = []
+
+
 class DiscoveryResult(BaseModel):
     found_items: list[DiscoveredItem] = []
     source_proposals: list[SourceProposalOut] = []
@@ -107,3 +117,7 @@ class InstructionPatch(BaseModel):
 
 class ProfileIn(BaseModel):
     content_md: str
+
+
+class ChatIn(BaseModel):
+    message: Optional[str] = None  # None/empty = "agent, ask me something"

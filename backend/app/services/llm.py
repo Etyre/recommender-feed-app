@@ -66,11 +66,11 @@ def _check_refusal(resp: Any) -> None:
         raise LLMRefusal(str(detail) if detail else "model refused the request")
 
 
-def parse_structured(
+def parse_structured_messages(
     *,
     model: str,
     system: Any,
-    user_content: Any,
+    messages: list,
     output_model: Type[T],
     max_tokens: int = 4000,
     usage: UsageTracker | None = None,
@@ -79,7 +79,7 @@ def parse_structured(
         model=model,
         max_tokens=max_tokens,
         system=system,
-        messages=[{"role": "user", "content": user_content}],
+        messages=messages,
         output_format=output_model,
     )
     if usage is not None:
@@ -89,6 +89,25 @@ def parse_structured(
     if parsed is None:
         raise ValueError("model output did not match the expected schema")
     return parsed
+
+
+def parse_structured(
+    *,
+    model: str,
+    system: Any,
+    user_content: Any,
+    output_model: Type[T],
+    max_tokens: int = 4000,
+    usage: UsageTracker | None = None,
+) -> T:
+    return parse_structured_messages(
+        model=model,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+        output_model=output_model,
+        max_tokens=max_tokens,
+        usage=usage,
+    )
 
 
 def generate_text(

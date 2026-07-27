@@ -51,16 +51,30 @@ def usage_daily(days: int = 30, conn: sqlite3.Connection = Depends(get_db)):
         (f"-{min(days, 365)} days",),
     ).fetchall()
     agg: dict = {}
+
+    def day_bucket(day: str) -> dict:
+        return agg.setdefault(
+            day, {"day": day, "runs": 0, "cost_usd": 0.0,
+                  "input_tokens": 0, "output_tokens": 0}
+        )
+
     for row in rows:
         llm = (json.loads(row["stats_json"]) or {}).get("llm") or {}
-        d = agg.setdefault(
-            row["day"], {"day": row["day"], "runs": 0, "cost_usd": 0.0,
-                         "input_tokens": 0, "output_tokens": 0}
-        )
+        d = day_bucket(row["day"])
         d["runs"] += 1
         d["cost_usd"] += llm.get("est_cost_usd", 0) or 0
         d["input_tokens"] += llm.get("input_tokens", 0) or 0
         d["output_tokens"] += llm.get("output_tokens", 0) or 0
+    # Non-pipeline spend (chat turns etc.)
+    for row in conn.execute(
+        """SELECT date(created_at, 'localtime') AS day, input_tokens, output_tokens, est_cost_usd
+           FROM llm_usage_log WHERE created_at > datetime('now', ?)""",
+        (f"-{min(days, 365)} days",),
+    ):
+        d = day_bucket(row["day"])
+        d["cost_usd"] += row["est_cost_usd"]
+        d["input_tokens"] += row["input_tokens"]
+        d["output_tokens"] += row["output_tokens"]
     out = sorted(agg.values(), key=lambda x: x["day"], reverse=True)
     for d in out:
         d["cost_usd"] = round(d["cost_usd"], 4)

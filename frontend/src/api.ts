@@ -1,4 +1,5 @@
 import type {
+  ChatMessage,
   DailyUsage,
   FeedItem,
   FeedResponse,
@@ -66,4 +67,7 @@ export const api = {
     fetch(`/api/pipeline/runs?limit=${limit}`).then((r) => j<PipelineRun[]>(r)),
   usageDaily: (days = 30) =>
     fetch(`/api/usage/daily?days=${days}`).then((r) => j<DailyUsage[]>(r)),
+  conversation: () => fetch("/api/conversation").then((r) => j<ChatMessage[]>(r)),
+  sendChat: (message: string | null) =>
+    post("/api/conversation", { message }).then((r) => j<ChatMessage[]>(r)),
 };

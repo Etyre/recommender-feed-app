@@ -10,7 +10,7 @@ import traceback
 from ..config import LOCK_PATH, LOG_DIR, STALE_RUN_MINUTES, has_llm_credentials
 from ..db import connect, migrate
 from ..seed import seed_defaults
-from ..services import discovery, extraction, fetching, ranking, triage
+from ..services import discovery, extraction, fetching, interview, ranking, triage
 from ..services.llm import UsageTracker
 from ..services.profile import ensure_profile, maybe_regenerate
 
@@ -92,6 +92,7 @@ def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
         run_stage("triage_discovered", lambda: triage.triage_pending(conn, usage))
         run_stage("ranking", lambda: ranking.rank_items(conn, run_id, usage))
         run_stage("profile", lambda: maybe_regenerate(conn, usage))
+        run_stage("interview", lambda: interview.maybe_ask(conn, usage))
     else:
         errors.append(
             "no Anthropic credentials found (set ANTHROPIC_API_KEY in data/.env); "
