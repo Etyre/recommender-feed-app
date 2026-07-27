@@ -85,6 +85,10 @@ def parse_structured_messages(
     if usage is not None:
         usage.add(model, resp.usage)
     _check_refusal(resp)
+    if resp.stop_reason == "max_tokens":
+        # Thinking + output share max_tokens; a truncated grammar-constrained reply
+        # can look "valid" while being garbage. Never return it.
+        raise ValueError("output truncated at max_tokens — increase the budget")
     parsed = resp.parsed_output
     if parsed is None:
         raise ValueError("model output did not match the expected schema")

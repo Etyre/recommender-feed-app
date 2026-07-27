@@ -92,8 +92,10 @@ def converse(
     messages = _history(conn)
     if not messages or messages[0]["role"] == "assistant":
         messages.insert(0, {"role": "user", "content": "(conversation begins)"})
-    if user_message is None:
+    if user_message is None and (not messages or messages[-1]["role"] == "assistant"):
         # Synthetic nudge, not stored: the agent opens or re-opens the conversation.
+        # (If the last message is the user's, we're generating/regenerating a reply
+        # to it — no nudge needed.)
         messages.append(
             {
                 "role": "user",
@@ -101,12 +103,13 @@ def converse(
                 or "Interview me: ask the one question whose answer would most improve my feed right now.",
             }
         )
+    # Generous budget: on Opus 5, thinking and the reply share max_tokens.
     turn = llm.parse_structured_messages(
         model=SMART_MODEL,
         system=_system_blocks(conn),
         messages=messages,
         output_model=InterviewTurn,
-        max_tokens=8000,
+        max_tokens=16000,
         usage=usage,
     )
     valid = [p for p in turn.proposed_instructions if p.kind in ("quest", "standing")]
