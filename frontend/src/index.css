@@ -234,6 +234,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 .add-source-fields input { flex: 1; font: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .add-source-fields input:last-of-type { flex: 0 1 180px; }
 
+.added-link {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 4px;
+}
+.added-link .hint { margin: 4px 0; }
+.added-link .rating { margin-top: 4px; }
+
 /* Proposals */
 .proposal {
   display: flex;
