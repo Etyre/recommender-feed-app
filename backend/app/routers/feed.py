@@ -156,7 +156,7 @@ def set_state(item_id: int, body: StateIn, conn: sqlite3.Connection = Depends(ge
 
 @router.post("/items/{item_id}/rating")
 def rate_item(item_id: int, body: RatingIn, conn: sqlite3.Connection = Depends(get_db)):
-    if body.rating not in ("critical", "worth_it", "fine", "not_worth"):
+    if body.rating not in ("critical", "worth_it", "fine", "not_worth", "didnt_finish"):
         raise HTTPException(400, "invalid rating")
     row = conn.execute("SELECT id FROM items WHERE id = ?", (item_id,)).fetchone()
     if not row:

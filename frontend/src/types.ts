@@ -1,4 +1,4 @@
-export type Rating = "critical" | "worth_it" | "fine" | "not_worth";
+export type Rating = "critical" | "worth_it" | "fine" | "not_worth" | "didnt_finish";
 
 export interface FeedItem {
   id: number;

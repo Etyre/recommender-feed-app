@@ -199,6 +199,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .rate.r-worth_it.selected { background: var(--worth); border-color: var(--worth); }
 .rate.r-fine.selected { background: var(--fine); border-color: var(--fine); }
 .rate.r-not_worth.selected { background: var(--notworth); border-color: var(--notworth); }
+.rate.r-didnt_finish.selected { background: #5c6b7a; border-color: #5c6b7a; }
 .note-box {
   width: 100%;
   margin-top: 8px;

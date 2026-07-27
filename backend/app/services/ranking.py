@@ -24,6 +24,8 @@ Rating semantics you are optimizing for — after reading, the reader rates item
 - "worth_it": worth their time to find and read
 - "fine": fine, but they wouldn't have missed much
 - "not_worth": not worth reading
+- "didnt_finish": opened it but didn't read the whole thing — usually means it failed \
+to hold their attention (check any note for the reason)
 Your goal is that high ranks earn "critical"/"worth_it" and low ranks would have earned \
 "fine"/"not_worth".
 

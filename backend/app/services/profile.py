@@ -39,8 +39,11 @@ must be concrete, evidence-based, and information-dense (~800-1500 tokens max).
 
 Rewrite the profile from the previous version plus the reader's ratings and notes. \
 Rating scale: critical (absolutely must have read) > worth_it (worth their time) > fine \
-(wouldn't have missed much) > not_worth (waste of time). The notes are the reader's own \
-words about WHY something was or wasn't valuable — weight them heavily and quote them.
+(wouldn't have missed much) > not_worth (waste of time). There is also "didnt_finish" \
+(opened but abandoned partway) — treat it as evidence the piece failed to hold their \
+attention (length, style, or fading interest in the topic) unless the note says \
+otherwise. The notes are the reader's own words about WHY something was or wasn't \
+valuable — weight them heavily and quote them.
 
 Output ONLY the markdown document, with exactly these sections:
 # Taste profile
