@@ -7,7 +7,7 @@ const OPTIONS: { value: Rating; label: string; title: string }[] = [
   { value: "worth_it", label: "Worth it", title: "Worth my time to find and read" },
   { value: "fine", label: "Fine", title: "Fine, but wouldn't have missed much" },
   { value: "not_worth", label: "Not worth it", title: "Not worth reading" },
-  { value: "didnt_finish", label: "DNF", title: "Didn't finish — opened it but didn't read the whole thing" },
+  { value: "didnt_finish", label: "Didn't finish", title: "Opened it but didn't read the whole thing" },
 ];
 
 export function RatingWidget({
