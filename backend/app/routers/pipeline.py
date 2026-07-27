@@ -41,6 +41,32 @@ def trigger_run(conn: sqlite3.Connection = Depends(get_db)):
     return {"run_id": run_id}
 
 
+@router.get("/usage/daily")
+def usage_daily(days: int = 30, conn: sqlite3.Connection = Depends(get_db)):
+    """Per-local-day LLM spend, aggregated from run stats."""
+    rows = conn.execute(
+        """SELECT date(started_at, 'localtime') AS day, stats_json
+           FROM pipeline_runs
+           WHERE stats_json IS NOT NULL AND started_at > datetime('now', ?)""",
+        (f"-{min(days, 365)} days",),
+    ).fetchall()
+    agg: dict = {}
+    for row in rows:
+        llm = (json.loads(row["stats_json"]) or {}).get("llm") or {}
+        d = agg.setdefault(
+            row["day"], {"day": row["day"], "runs": 0, "cost_usd": 0.0,
+                         "input_tokens": 0, "output_tokens": 0}
+        )
+        d["runs"] += 1
+        d["cost_usd"] += llm.get("est_cost_usd", 0) or 0
+        d["input_tokens"] += llm.get("input_tokens", 0) or 0
+        d["output_tokens"] += llm.get("output_tokens", 0) or 0
+    out = sorted(agg.values(), key=lambda x: x["day"], reverse=True)
+    for d in out:
+        d["cost_usd"] = round(d["cost_usd"], 4)
+    return out
+
+
 @router.get("/pipeline/runs")
 def list_runs(limit: int = 10, conn: sqlite3.Connection = Depends(get_db)):
     rows = conn.execute(

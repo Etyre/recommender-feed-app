@@ -55,6 +55,14 @@ export interface Instruction {
   agent_status_note: string | null;
 }
 
+export interface DailyUsage {
+  day: string; // YYYY-MM-DD (local)
+  runs: number;
+  cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
 export interface PipelineRun {
   id: number;
   trigger: string;

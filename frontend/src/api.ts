@@ -1,4 +1,5 @@
 import type {
+  DailyUsage,
   FeedResponse,
   Instruction,
   PipelineRun,
@@ -61,4 +62,6 @@ export const api = {
   runPipeline: () => post("/api/pipeline/run").then((r) => j<{ run_id: number }>(r)),
   runs: (limit = 1) =>
     fetch(`/api/pipeline/runs?limit=${limit}`).then((r) => j<PipelineRun[]>(r)),
+  usageDaily: (days = 30) =>
+    fetch(`/api/usage/daily?days=${days}`).then((r) => j<DailyUsage[]>(r)),
 };

@@ -3,6 +3,7 @@ import { usePipeline } from "./hooks/usePipeline";
 import { FeedPage } from "./pages/FeedPage";
 import { SourcesPage } from "./pages/SourcesPage";
 import { InstructionsPanel } from "./components/InstructionsPanel";
+import { CostWidget } from "./components/CostWidget";
 import { RunStatus } from "./components/RunStatus";
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
           </button>
         </nav>
         <div className="run-controls">
+          <CostWidget runVersion={feedVersion} />
           <RunStatus run={latestRun} />
           <button className="refresh" onClick={trigger} disabled={running}>
             {running ? "Running…" : "↻ Refresh"}
