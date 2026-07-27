@@ -13,6 +13,28 @@ from .common import set_item_state
 HEADERS = {"User-Agent": USER_AGENT}
 
 
+def fetch_title_and_text(url: str) -> "tuple[str | None, str]":
+    """Fetch a page and return (title, extracted_text). Used for user-added links."""
+    import re
+    from html import unescape
+
+    resp = httpx.get(url, headers=HEADERS, follow_redirects=True, timeout=30)
+    resp.raise_for_status()
+    html = resp.text
+    text = trafilatura.extract(html, url=url) or ""
+    title = None
+    try:
+        meta = trafilatura.extract_metadata(html)
+        title = getattr(meta, "title", None)
+    except Exception:
+        pass
+    if not title:
+        m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+        if m:
+            title = " ".join(unescape(m.group(1)).split())
+    return title, text[:CONTENT_MAX_CHARS]
+
+
 def _content_hash(text: str) -> str | None:
     normalized = " ".join(text.lower().split())
     if len(normalized) < 200:

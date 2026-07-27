@@ -5,8 +5,11 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..schemas import ProfileIn, RatingIn, StateIn
+from ..config import has_llm_credentials
+from ..schemas import LinkIn, ProfileIn, RatingIn, StateIn
 from ..services.common import get_latest_profile, set_item_state
+from ..services.fetching import add_user_item
+from ..services.triage import triage_single
 from .deps import get_db
 
 router = APIRouter()
@@ -31,7 +34,8 @@ def _item_dict(conn: sqlite3.Connection, row: sqlite3.Row, extra: dict | None = 
         "id": row["id"],
         "title": row["title"],
         "url": row["url"],
-        "source": row["source_name"] or ("web discovery" if row["found_by"] == "discovery" else None),
+        "source": row["source_name"]
+        or {"discovery": "web discovery", "user": "added by you"}.get(row["found_by"]),
         "published_at": row["published_at"],
         "summary": row["summary"],
         "topics": json.loads(row["topics"]) if row["topics"] else [],
@@ -79,6 +83,18 @@ def get_feed(conn: sqlite3.Connection = Depends(get_db)):
             )
             for r in rows
         ]
+        # User-saved links that haven't been through a ranking run yet go on top —
+        # they'd otherwise be invisible until the next pipeline run.
+        pending_user = conn.execute(
+            """SELECT i.*, s.name AS source_name
+               FROM items i LEFT JOIN sources s ON s.id = i.source_id
+               WHERE i.found_by = 'user' AND i.state IN ('new', 'triaged')
+                 AND i.id NOT IN
+                   (SELECT item_id FROM feed_rankings WHERE pipeline_run_id = ?)
+               ORDER BY i.discovered_at DESC""",
+            (run_id,),
+        ).fetchall()
+        items = [_item_dict(conn, r) for r in pending_user] + items
         run = conn.execute(
             "SELECT id, status, started_at, finished_at FROM pipeline_runs WHERE id = ?",
             (run_id,),
@@ -100,6 +116,31 @@ def get_feed(conn: sqlite3.Connection = Depends(get_db)):
         "run": None,
         "items": [_item_dict(conn, r) for r in rows],
     }
+
+
+@router.post("/items", status_code=201)
+def add_link(body: LinkIn, conn: sqlite3.Connection = Depends(get_db)):
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(400, "url is required")
+    if not url.startswith("http"):
+        url = "https://" + url
+    try:
+        item_id = add_user_item(conn, url)
+    except Exception as e:  # noqa: BLE001 - fetch/network failures surface to the UI
+        raise HTTPException(422, f"could not fetch that page: {e}")
+    conn.commit()
+    if has_llm_credentials():
+        try:
+            triage_single(conn, item_id)  # instant summary; pipeline retries on failure
+        except Exception:  # noqa: BLE001
+            pass
+    row = conn.execute(
+        """SELECT i.*, s.name AS source_name
+           FROM items i LEFT JOIN sources s ON s.id = i.source_id WHERE i.id = ?""",
+        (item_id,),
+    ).fetchone()
+    return _item_dict(conn, row)
 
 
 @router.post("/items/{item_id}/state")

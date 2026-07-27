@@ -39,37 +39,84 @@ def _system_blocks(conn: sqlite3.Connection) -> list[dict]:
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
 
+_ITEM_QUERY = """SELECT i.id, i.title, i.author, i.published_at, i.content_text, i.found_by,
+                        s.name AS source_name, s.filter_note
+                 FROM items i LEFT JOIN sources s ON s.id = i.source_id"""
+
+
+def _source_label(row: sqlite3.Row) -> str:
+    if row["source_name"]:
+        return row["source_name"]
+    if row["found_by"] == "user":
+        return "a link the reader saved manually (treat as high interest)"
+    return "discovered via web search"
+
+
+def _apply_triage(
+    conn: sqlite3.Connection, system: list, row: sqlite3.Row, usage: llm.UsageTracker
+) -> str:
+    """Triage one item and persist the result. Returns the new state."""
+    content = (row["content_text"] or "")[:TRIAGE_CONTENT_CHARS]
+    user = (
+        f"Source: {_source_label(row)}\n"
+        f"Source filter rule: {row['filter_note'] or '(none)'}\n"
+        f"Title: {row['title']}\n"
+        f"Author: {row['author'] or 'unknown'}\n"
+        f"Published: {row['published_at'] or 'unknown'}\n\n"
+        f"Content (may be truncated):\n{content or '(content unavailable — judge from the title)'}"
+    )
+    result = llm.parse_structured(
+        model=TRIAGE_MODEL,
+        system=system,
+        user_content=user,
+        output_model=TriageResult,
+        max_tokens=2000,
+        usage=usage,
+    )
+    conn.execute(
+        """UPDATE items SET summary = ?, topics = ?, triage_score = ?, triage_json = ?
+           WHERE id = ?""",
+        (
+            result.summary,
+            json.dumps(result.topics),
+            max(0, min(10, result.relevance)),
+            result.model_dump_json(),
+            row["id"],
+        ),
+    )
+    # A manually-saved link is never filtered out — the user explicitly wants it.
+    state = (
+        "triaged"
+        if (result.passes_source_filter or row["found_by"] == "user")
+        else "filtered"
+    )
+    set_item_state(conn, row["id"], state)
+    conn.commit()
+    return state
+
+
+def triage_single(conn: sqlite3.Connection, item_id: int, usage: llm.UsageTracker | None = None) -> None:
+    """Immediate triage of one item (used when the user saves a link)."""
+    row = conn.execute(
+        _ITEM_QUERY + " WHERE i.id = ? AND i.state = 'new'", (item_id,)
+    ).fetchone()
+    if row is None:
+        return
+    _apply_triage(conn, _system_blocks(conn), row, usage or llm.UsageTracker())
+
+
 def triage_pending(conn: sqlite3.Connection, usage: llm.UsageTracker) -> dict:
     stats = {"triaged": 0, "filtered": 0, "errors": 0}
     system = _system_blocks(conn)
     rows = conn.execute(
-        """SELECT i.id, i.title, i.author, i.published_at, i.content_text, i.found_by,
-                  s.name AS source_name, s.filter_note
-           FROM items i LEFT JOIN sources s ON s.id = i.source_id
-           WHERE i.state = 'new' AND i.content_text IS NOT NULL
-           ORDER BY i.id LIMIT ?""",
+        _ITEM_QUERY
+        + " WHERE i.state = 'new' AND i.content_text IS NOT NULL ORDER BY i.id LIMIT ?",
         (TRIAGE_MAX_ITEMS_PER_RUN,),
     ).fetchall()
     consecutive_errors = 0
     for row in rows:
-        content = (row["content_text"] or "")[:TRIAGE_CONTENT_CHARS]
-        user = (
-            f"Source: {row['source_name'] or 'discovered via web search'}\n"
-            f"Source filter rule: {row['filter_note'] or '(none)'}\n"
-            f"Title: {row['title']}\n"
-            f"Author: {row['author'] or 'unknown'}\n"
-            f"Published: {row['published_at'] or 'unknown'}\n\n"
-            f"Content (may be truncated):\n{content or '(content unavailable — judge from the title)'}"
-        )
         try:
-            result = llm.parse_structured(
-                model=TRIAGE_MODEL,
-                system=system,
-                user_content=user,
-                output_model=TriageResult,
-                max_tokens=2000,
-                usage=usage,
-            )
+            state = _apply_triage(conn, system, row, usage)
             consecutive_errors = 0
         except Exception:  # noqa: BLE001 - leave as 'new', retried next run
             stats["errors"] += 1
@@ -77,22 +124,5 @@ def triage_pending(conn: sqlite3.Connection, usage: llm.UsageTracker) -> dict:
             if consecutive_errors >= 5:
                 break
             continue
-        conn.execute(
-            """UPDATE items SET summary = ?, topics = ?, triage_score = ?, triage_json = ?
-               WHERE id = ?""",
-            (
-                result.summary,
-                json.dumps(result.topics),
-                max(0, min(10, result.relevance)),
-                result.model_dump_json(),
-                row["id"],
-            ),
-        )
-        if result.passes_source_filter:
-            set_item_state(conn, row["id"], "triaged")
-            stats["triaged"] += 1
-        else:
-            set_item_state(conn, row["id"], "filtered")
-            stats["filtered"] += 1
-        conn.commit()
+        stats["triaged" if state == "triaged" else "filtered"] += 1
     return stats

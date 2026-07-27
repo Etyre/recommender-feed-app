@@ -35,6 +35,8 @@ topic already covered at rank 3 should generally fall below a decent article on 
 uncovered topic the reader cares about.
 
 Other rules:
+- Items marked "saved manually by the reader" are the strongest possible interest \
+signal: rank them at or near the top until read, above comparable source items.
 - Short-term quests are high priority: items answering an active quest rank near the top.
 - Recency matters more for news-like items than for evergreen papers and essays.
 - STABILITY: the previous ranking is provided. Keep ordering roughly stable unless new \
@@ -72,7 +74,11 @@ def _candidates(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 def _card(row: sqlite3.Row) -> str:
     topics = ", ".join(json.loads(row["topics"])) if row["topics"] else ""
-    via = " (found via web discovery)" if row["found_by"] == "discovery" else ""
+    via = ""
+    if row["found_by"] == "discovery":
+        via = " (found via web discovery)"
+    elif row["found_by"] == "user":
+        via = " (saved manually by the reader)"
     return (
         f"[id={row['id']}] {row['title']}\n"
         f"  source: {row['source_name'] or 'web'}{via} | published: "

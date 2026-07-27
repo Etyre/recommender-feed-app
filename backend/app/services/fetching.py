@@ -136,6 +136,34 @@ def insert_item(
     return cur.lastrowid if cur.rowcount else None
 
 
+def add_user_item(conn: sqlite3.Connection, url: str) -> int:
+    """Insert a link the user saved manually. If it already exists but was
+    dismissed/filtered, revive it — an explicit add overrides earlier judgments."""
+    from .common import set_item_state
+    from .extraction import fetch_title_and_text
+
+    canon = canonicalize_url(url)
+    existing = conn.execute(
+        "SELECT id, state, triage_score FROM items WHERE canonical_url = ?", (canon,)
+    ).fetchone()
+    if existing:
+        if existing["state"] in ("dismissed", "filtered"):
+            revived = "triaged" if existing["triage_score"] is not None else "new"
+            set_item_state(conn, existing["id"], revived)
+        conn.execute("UPDATE items SET found_by = 'user' WHERE id = ?", (existing["id"],))
+        return existing["id"]
+    title, text = fetch_title_and_text(url)
+    item_id = insert_item(
+        conn,
+        url=url,
+        title=title or url,
+        found_by="user",
+        content_text=text or None,
+    )
+    assert item_id is not None  # no canonical duplicate exists at this point
+    return item_id
+
+
 def _struct_time_to_iso(t) -> str | None:
     if not t:
         return None

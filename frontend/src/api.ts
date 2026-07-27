@@ -1,5 +1,6 @@
 import type {
   DailyUsage,
+  FeedItem,
   FeedResponse,
   Instruction,
   PipelineRun,
@@ -38,6 +39,7 @@ const patch = (url: string, body: unknown) =>
 
 export const api = {
   feed: () => fetch("/api/feed").then((r) => j<FeedResponse>(r)),
+  addLink: (url: string) => post("/api/items", { url }).then((r) => j<FeedItem>(r)),
   setState: (id: number, state: "read" | "dismissed") =>
     post(`/api/items/${id}/state`, { state }).then((r) => j<{ ok: boolean }>(r)),
   rate: (id: number, rating: Rating, note?: string) =>

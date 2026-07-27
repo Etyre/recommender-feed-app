@@ -72,6 +72,10 @@ class StateIn(BaseModel):
     state: str  # 'read' | 'dismissed'
 
 
+class LinkIn(BaseModel):
+    url: str
+
+
 class RatingIn(BaseModel):
     rating: str  # 'critical' | 'worth_it' | 'fine' | 'not_worth'
     note: Optional[str] = None

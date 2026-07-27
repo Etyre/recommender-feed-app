@@ -3,6 +3,7 @@ import { usePipeline } from "./hooks/usePipeline";
 import { FeedPage } from "./pages/FeedPage";
 import { SourcesPage } from "./pages/SourcesPage";
 import { InstructionsPanel } from "./components/InstructionsPanel";
+import { AddLinkPanel } from "./components/AddLinkPanel";
 import { CostWidget } from "./components/CostWidget";
 import { RunStatus } from "./components/RunStatus";
 
@@ -48,6 +49,7 @@ export default function App() {
       {tab === "instructions" && (
         <main>
           <InstructionsPanel />
+          <AddLinkPanel />
         </main>
       )}
       {tab === "sources" && <SourcesPage />}
