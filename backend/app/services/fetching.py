@@ -152,16 +152,32 @@ def add_user_item(conn: sqlite3.Connection, url: str) -> int:
             set_item_state(conn, existing["id"], revived)
         conn.execute("UPDATE items SET found_by = 'user' WHERE id = ?", (existing["id"],))
         return existing["id"]
-    title, text = fetch_title_and_text(url)
+    # Content extraction is best-effort: many sites (Reuters, paywalls) block
+    # non-browser fetchers. An explicit user save must still succeed — fall back
+    # to a slug-derived title and no content ('' so the pipeline won't refetch).
+    try:
+        title, text = fetch_title_and_text(url)
+    except Exception:  # noqa: BLE001
+        title, text = None, ""
     item_id = insert_item(
         conn,
         url=url,
-        title=title or url,
+        title=title or _title_from_url(url),
         found_by="user",
-        content_text=text or None,
+        content_text=text if text else "",
     )
     assert item_id is not None  # no canonical duplicate exists at this point
     return item_id
+
+
+def _title_from_url(url: str) -> str:
+    """Best-effort human-readable title from a URL slug."""
+    path = urlsplit(url).path.strip("/")
+    slug = path.rsplit("/", 1)[-1] if path else urlsplit(url).netloc
+    slug = re.sub(r"\.(html?|php|aspx?)$", "", slug)
+    words = [w for w in re.split(r"[-_+]", slug) if w]
+    cleaned = " ".join(words)
+    return (cleaned[:1].upper() + cleaned[1:]) if cleaned else url
 
 
 def _struct_time_to_iso(t) -> str | None:
