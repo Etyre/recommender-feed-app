@@ -5,7 +5,10 @@ from .config import DB_PATH, MIGRATIONS_DIR
 
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=5)
+    # check_same_thread=False: FastAPI may run a sync dependency and its route
+    # handler on different threadpool threads. Each request gets its own
+    # connection (never shared concurrently), so this is safe.
+    conn = sqlite3.connect(DB_PATH, timeout=5, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
