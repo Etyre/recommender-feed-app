@@ -256,9 +256,12 @@ button:disabled { opacity: 0.5; cursor: default; }
   margin-top: 8px;
   font: inherit;
   font-size: 13.5px;
+  line-height: 1.4;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
+  resize: vertical;
+  min-height: 44px;
 }
 
 /* Sources */

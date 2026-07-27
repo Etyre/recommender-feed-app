@@ -51,13 +51,18 @@ export function RatingWidget({
         ))}
       </div>
       {rating && (
-        <input
+        <textarea
           className="note-box"
-          placeholder="Why? (optional — helps the system learn)"
+          rows={2}
+          placeholder="Why? (optional — helps the system learn. Saves when you click away; ⌘↵ to save.)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           onBlur={saveNote}
-          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              (e.target as HTMLTextAreaElement).blur();
+            }
+          }}
         />
       )}
     </div>
