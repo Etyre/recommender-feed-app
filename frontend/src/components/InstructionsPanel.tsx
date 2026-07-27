@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Instruction } from "../types";
 
+/** "keep_looking: text" -> "still looking — text"; "likely_satisfied: ..." -> "likely satisfied — ..." */
+function formatAgentNote(note: string): string {
+  return note.replace(/^(\w+):\s*/, (_, status: string) => {
+    const label = status === "keep_looking" ? "still looking" : status.replace(/_/g, " ");
+    return `${label} — `;
+  });
+}
+
 export function InstructionsPanel() {
   const [instructions, setInstructions] = useState<Instruction[]>([]);
   const [text, setText] = useState("");
@@ -65,23 +73,25 @@ export function InstructionsPanel() {
         <ul className="instruction-list">
           {active.map((i) => (
             <li key={i.id} className={`chip chip-${i.kind}`}>
-              <span className="chip-kind">{i.kind === "quest" ? "quest" : "standing"}</span>
-              <span className="chip-text">{i.text}</span>
+              <div className="chip-main">
+                <span className="chip-kind">{i.kind === "quest" ? "quest" : "standing"}</span>
+                <span className="chip-text">{i.text}</span>
+                <button
+                  className="chip-close"
+                  title={i.kind === "quest" ? "Mark satisfied" : "Archive"}
+                  onClick={() => setStatus(i.id, i.kind === "quest" ? "satisfied" : "archived")}
+                >
+                  ✕
+                </button>
+              </div>
               {i.agent_status_note && (
-                <span className="agent-note" title={i.agent_status_note}>
-                  🤖 {i.agent_status_note.slice(0, 80)}
+                <div className="agent-note">
+                  <span>🤖 {formatAgentNote(i.agent_status_note)}</span>
                   {i.kind === "quest" && (
                     <button onClick={() => setStatus(i.id, "satisfied")}>confirm done</button>
                   )}
-                </span>
+                </div>
               )}
-              <button
-                className="chip-close"
-                title={i.kind === "quest" ? "Mark satisfied" : "Archive"}
-                onClick={() => setStatus(i.id, i.kind === "quest" ? "satisfied" : "archived")}
-              >
-                ✕
-              </button>
             </li>
           ))}
         </ul>
@@ -92,11 +102,13 @@ export function InstructionsPanel() {
           <ul className="instruction-list">
             {resolved.map((i) => (
               <li key={i.id} className="chip chip-resolved">
-                <span className="chip-kind">{i.status}</span>
-                <span className="chip-text">{i.text}</span>
-                <button className="chip-close" onClick={() => setStatus(i.id, "archived")}>
-                  ✕
-                </button>
+                <div className="chip-main">
+                  <span className="chip-kind">{i.status}</span>
+                  <span className="chip-text">{i.text}</span>
+                  <button className="chip-close" onClick={() => setStatus(i.id, "archived")}>
+                    ✕
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
