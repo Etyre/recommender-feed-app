@@ -10,7 +10,7 @@ import traceback
 from ..config import LOCK_PATH, LOG_DIR, STALE_RUN_MINUTES, has_llm_credentials
 from ..db import connect, migrate
 from ..seed import seed_defaults
-from ..services import discovery, extraction, fetching, interview, ranking, triage
+from ..services import backup, discovery, extraction, fetching, interview, ranking, triage
 from ..services.llm import UsageTracker
 from ..services.profile import ensure_profile, maybe_regenerate
 
@@ -98,6 +98,9 @@ def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
             "no Anthropic credentials found (set ANTHROPIC_API_KEY in data/.env); "
             "skipped triage/discovery/ranking — feed will show chronological order"
         )
+    # Always last, and always runs: snapshot + JSON export + iCloud mirror of the
+    # ratings/notes dataset. See services/backup.py.
+    run_stage("backup", lambda: backup.run_backup(conn))
 
     stats["llm"] = usage.summary()
     status = "success" if not errors else "partial"

@@ -32,6 +32,11 @@ run: build
 pipeline:
 	cd backend && .venv/bin/python -m app.pipeline --trigger manual
 
+backup:
+	cd backend && .venv/bin/python -c "from app.db import connect, migrate; \
+	from app.services.backup import run_backup; migrate(); \
+	import json; print(json.dumps(run_backup(connect()), indent=1))"
+
 seed:
 	cd backend && .venv/bin/python -m app.seed
 
