@@ -22,16 +22,28 @@ def fetch_title_and_text(url: str) -> "tuple[str | None, str]":
     resp.raise_for_status()
     html = resp.text
     text = trafilatura.extract(html, url=url) or ""
+    # og:title first — it's server-rendered and reliable even on JS-heavy sites
+    # (trafilatura's metadata guess can grab stray numbers, e.g. LessWrong karma).
     title = None
-    try:
-        meta = trafilatura.extract_metadata(html)
-        title = getattr(meta, "title", None)
-    except Exception:
-        pass
-    if not title:
+    m = re.search(
+        r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html, re.I
+    ) or re.search(
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']', html, re.I
+    )
+    if m:
+        title = unescape(m.group(1)).strip()
+    if not title or title.isdigit():
+        try:
+            meta = trafilatura.extract_metadata(html)
+            title = getattr(meta, "title", None)
+        except Exception:
+            pass
+    if not title or title.isdigit():
         m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
         if m:
             title = " ".join(unescape(m.group(1)).split())
+    if title and title.isdigit():
+        title = None
     return title, text[:CONTENT_MAX_CHARS]
 
 

@@ -261,6 +261,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 .rate.r-fine.selected { background: var(--fine); border-color: var(--fine); }
 .rate.r-not_worth.selected { background: var(--notworth); border-color: var(--notworth); }
 .rate.r-didnt_finish.selected { background: #5c6b7a; border-color: #5c6b7a; }
+.note-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.save-notes { font-size: 12.5px; font-weight: 600; }
+.saved-indicator { font-size: 12.5px; color: var(--worth); }
 .note-box {
   width: 100%;
   margin-top: 8px;

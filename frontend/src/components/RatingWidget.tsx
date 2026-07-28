@@ -24,15 +24,21 @@ export function RatingWidget({
   const [rating, setRating] = useState<Rating | null>(initialRating);
   const [note, setNote] = useState(initialNote ?? "");
   const [readingNotes, setReadingNotes] = useState(initialReadingNotes ?? "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const lastSaved = useRef({ note: initialNote ?? "", readingNotes: initialReadingNotes ?? "" });
 
+  const dirty =
+    note !== lastSaved.current.note || readingNotes !== lastSaved.current.readingNotes;
+
   const save = (nextRating: Rating) => {
+    setSaveState("saving");
     api
       .rate(itemId, nextRating, note.trim() || undefined, readingNotes.trim() || undefined)
       .then(() => {
         lastSaved.current = { note, readingNotes };
+        setSaveState("saved");
       })
-      .catch(() => {});
+      .catch(() => setSaveState("idle"));
   };
 
   const choose = (value: Rating) => {
@@ -41,8 +47,7 @@ export function RatingWidget({
   };
 
   const saveNotes = () => {
-    if (!rating) return;
-    if (note === lastSaved.current.note && readingNotes === lastSaved.current.readingNotes) return;
+    if (!rating || !dirty) return;
     save(rating);
   };
 
@@ -86,6 +91,14 @@ export function RatingWidget({
             onBlur={saveNotes}
             onKeyDown={blurOnCmdEnter}
           />
+          <div className="note-actions">
+            <button className="save-notes" onClick={saveNotes} disabled={!dirty}>
+              {saveState === "saving" ? "Saving…" : "Save notes"}
+            </button>
+            {saveState === "saved" && !dirty && (
+              <span className="saved-indicator">✓ saved</span>
+            )}
+          </div>
         </>
       )}
     </div>
