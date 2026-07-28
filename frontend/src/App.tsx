@@ -38,10 +38,10 @@ export default function App() {
             Feed
           </button>
           <button
-            className={tab === "instructions" ? "tab active" : "tab"}
-            onClick={() => setTab("instructions")}
+            className={tab === "history" ? "tab active" : "tab"}
+            onClick={() => setTab("history")}
           >
-            Instructions
+            History
           </button>
           <button
             className={tab === "sources" ? "tab active" : "tab"}
@@ -50,16 +50,16 @@ export default function App() {
             Sources
           </button>
           <button
+            className={tab === "instructions" ? "tab active" : "tab"}
+            onClick={() => setTab("instructions")}
+          >
+            Instructions
+          </button>
+          <button
             className={tab === "chat" ? "tab active" : "tab"}
             onClick={() => setTab("chat")}
           >
             Chat{chatPending && <span className="tab-dot" title="The agent has a question for you" />}
-          </button>
-          <button
-            className={tab === "history" ? "tab active" : "tab"}
-            onClick={() => setTab("history")}
-          >
-            History
           </button>
         </nav>
         <div className="run-controls">
