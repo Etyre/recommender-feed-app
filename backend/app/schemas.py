@@ -87,8 +87,9 @@ class LinkIn(BaseModel):
 
 
 class RatingIn(BaseModel):
-    rating: str  # 'critical' | 'worth_it' | 'fine' | 'not_worth'
-    note: Optional[str] = None
+    rating: str  # 'critical' | 'worth_it' | 'fine' | 'not_worth' | 'didnt_finish'
+    note: Optional[str] = None  # direct feedback to the AI
+    reading_notes: Optional[str] = None  # raw notes taken while reading
 
 
 class SourceIn(BaseModel):

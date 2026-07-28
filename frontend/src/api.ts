@@ -43,8 +43,10 @@ export const api = {
   addLink: (url: string) => post("/api/items", { url }).then((r) => j<FeedItem>(r)),
   setState: (id: number, state: "read" | "dismissed") =>
     post(`/api/items/${id}/state`, { state }).then((r) => j<{ ok: boolean }>(r)),
-  rate: (id: number, rating: Rating, note?: string) =>
-    post(`/api/items/${id}/rating`, { rating, note }).then((r) => j<{ ok: boolean }>(r)),
+  rate: (id: number, rating: Rating, note?: string, readingNotes?: string) =>
+    post(`/api/items/${id}/rating`, { rating, note, reading_notes: readingNotes }).then(
+      (r) => j<{ ok: boolean }>(r)
+    ),
 
   sources: () => fetch("/api/sources").then((r) => j<Source[]>(r)),
   addSource: (url: string, name?: string) =>

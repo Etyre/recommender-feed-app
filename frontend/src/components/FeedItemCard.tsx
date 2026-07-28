@@ -49,7 +49,12 @@ export function FeedItemCard({
             <p>{item.rationale}</p>
           </details>
         )}
-        <RatingWidget itemId={item.id} initialRating={item.rating} initialNote={item.note} />
+        <RatingWidget
+          itemId={item.id}
+          initialRating={item.rating}
+          initialNote={item.note}
+          initialReadingNotes={item.reading_notes}
+        />
       </div>
       <button
         className="dismiss"

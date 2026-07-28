@@ -11,6 +11,7 @@ export interface FeedItem {
   state: string;
   rating: Rating | null;
   note: string | null;
+  reading_notes: string | null;
   rank: number | null;
   score: number | null;
   rationale: string | null;

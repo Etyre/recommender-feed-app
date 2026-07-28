@@ -54,6 +54,7 @@ export function AddLinkPanel() {
             itemId={item.id}
             initialRating={item.rating}
             initialNote={item.note}
+            initialReadingNotes={item.reading_notes}
           />
         </div>
       ))}

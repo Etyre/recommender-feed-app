@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../api";
 import type { Rating } from "../types";
 
@@ -14,26 +14,42 @@ export function RatingWidget({
   itemId,
   initialRating,
   initialNote,
+  initialReadingNotes,
 }: {
   itemId: number;
   initialRating: Rating | null;
   initialNote: string | null;
+  initialReadingNotes?: string | null;
 }) {
   const [rating, setRating] = useState<Rating | null>(initialRating);
   const [note, setNote] = useState(initialNote ?? "");
-  const [savedNote, setSavedNote] = useState(initialNote ?? "");
+  const [readingNotes, setReadingNotes] = useState(initialReadingNotes ?? "");
+  const lastSaved = useRef({ note: initialNote ?? "", readingNotes: initialReadingNotes ?? "" });
+
+  const save = (nextRating: Rating) => {
+    api
+      .rate(itemId, nextRating, note.trim() || undefined, readingNotes.trim() || undefined)
+      .then(() => {
+        lastSaved.current = { note, readingNotes };
+      })
+      .catch(() => {});
+  };
 
   const choose = (value: Rating) => {
     setRating(value);
-    api.rate(itemId, value, note || undefined).catch(() => {});
+    save(value);
   };
 
-  const saveNote = () => {
-    if (!rating || note === savedNote) return;
-    api
-      .rate(itemId, rating, note || undefined)
-      .then(() => setSavedNote(note))
-      .catch(() => {});
+  const saveNotes = () => {
+    if (!rating) return;
+    if (note === lastSaved.current.note && readingNotes === lastSaved.current.readingNotes) return;
+    save(rating);
+  };
+
+  const blurOnCmdEnter = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      (e.target as HTMLTextAreaElement).blur();
+    }
   };
 
   return (
@@ -51,19 +67,26 @@ export function RatingWidget({
         ))}
       </div>
       {rating && (
-        <textarea
-          className="note-box"
-          rows={2}
-          placeholder="Why? (optional — helps the system learn. Saves when you click away; ⌘↵ to save.)"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={saveNote}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              (e.target as HTMLTextAreaElement).blur();
-            }
-          }}
-        />
+        <>
+          <textarea
+            className="note-box"
+            rows={3}
+            placeholder="Your reading notes (optional) — paste whatever you wrote while reading; the AI infers what mattered to you from them."
+            value={readingNotes}
+            onChange={(e) => setReadingNotes(e.target.value)}
+            onBlur={saveNotes}
+            onKeyDown={blurOnCmdEnter}
+          />
+          <textarea
+            className="note-box"
+            rows={2}
+            placeholder="To the AI (optional) — tell it directly what was or wasn't valuable here."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={saveNotes}
+            onKeyDown={blurOnCmdEnter}
+          />
+        </>
       )}
     </div>
   );

@@ -23,7 +23,8 @@ _VISIBLE = (
 
 def _latest_rating(conn: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
     return conn.execute(
-        "SELECT rating, note FROM ratings WHERE item_id = ? ORDER BY id DESC LIMIT 1",
+        "SELECT rating, note, reading_notes FROM ratings WHERE item_id = ? "
+        "ORDER BY id DESC LIMIT 1",
         (item_id,),
     ).fetchone()
 
@@ -42,6 +43,7 @@ def _item_dict(conn: sqlite3.Connection, row: sqlite3.Row, extra: dict | None = 
         "state": row["state"],
         "rating": rating["rating"] if rating else None,
         "note": rating["note"] if rating else None,
+        "reading_notes": rating["reading_notes"] if rating else None,
         "rank": None,
         "score": None,
         "rationale": None,
@@ -162,8 +164,8 @@ def rate_item(item_id: int, body: RatingIn, conn: sqlite3.Connection = Depends(g
     if not row:
         raise HTTPException(404, "item not found")
     conn.execute(
-        "INSERT INTO ratings (item_id, rating, note) VALUES (?, ?, ?)",
-        (item_id, body.rating, body.note),
+        "INSERT INTO ratings (item_id, rating, note, reading_notes) VALUES (?, ?, ?, ?)",
+        (item_id, body.rating, body.note or None, body.reading_notes or None),
     )
     set_item_state(conn, item_id, "read")
     return {"ok": True}
