@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { FeedResponse } from "../types";
+import { AddLinkPanel } from "../components/AddLinkPanel";
 import { FeedItemCard } from "../components/FeedItemCard";
 
 export function FeedPage({ version }: { version: number }) {
@@ -22,6 +23,7 @@ export function FeedPage({ version }: { version: number }) {
 
   return (
     <main>
+      <AddLinkPanel />
       {error && <p className="error">Could not load feed: {error}</p>}
       {data?.mode === "chronological" && data.items.length > 0 && (
         <p className="hint">
