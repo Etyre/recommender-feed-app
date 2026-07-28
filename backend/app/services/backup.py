@@ -7,7 +7,9 @@ app — everything else can be re-fetched or regenerated. Strategy:
 2. Plain-JSON export of the precious tables — readable forever, immune to SQLite
    corruption, and directly usable by any future recommendation engine.
 3. Both mirrored off-machine to iCloud Drive (or FEEDAPP_BACKUP_MIRROR).
-4. 30 days of dated snapshots retained locally and on the mirror.
+4. Retention (locally and on the mirror): 30 days of dailies, plus the earliest
+   backup of each calendar month kept FOREVER — so a mistake or corruption noticed
+   months later is still recoverable.
 """
 from __future__ import annotations
 
@@ -55,12 +57,20 @@ def _quick_check(conn: sqlite3.Connection) -> bool:
 
 
 def _prune(directory: Path) -> int:
+    """Delete dailies older than RETAIN_DAYS — except the earliest backup of each
+    calendar month, which is kept forever."""
     cutoff = (date.today() - timedelta(days=RETAIN_DAYS)).isoformat()
     removed = 0
     for pattern in ("feed-*.db", "export-*.json"):
-        for path in directory.glob(pattern):
+        files = sorted(directory.glob(pattern))  # zero-padded dates: sorted == chronological
+        earliest_of_month: dict[str, Path] = {}
+        for path in files:
+            month = path.stem.split("-", 1)[1][:7]  # 'YYYY-MM'
+            earliest_of_month.setdefault(month, path)
+        keep_forever = set(earliest_of_month.values())
+        for path in files:
             stamp = path.stem.split("-", 1)[1]
-            if stamp < cutoff:
+            if stamp < cutoff and path not in keep_forever:
                 path.unlink(missing_ok=True)
                 removed += 1
     return removed
