@@ -264,6 +264,66 @@ button:disabled { opacity: 0.5; cursor: default; }
 .note-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 .save-notes { font-size: 12.5px; font-weight: 600; }
 .saved-indicator { font-size: 12.5px; color: var(--worth); }
+
+/* Collapsed rating + badges */
+.rating-collapsed { display: flex; align-items: baseline; gap: 8px; }
+.rate-badge {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 99px;
+  padding: 1px 10px;
+}
+.rate-badge.r-critical { background: var(--critical); }
+.rate-badge.r-worth_it { background: var(--worth); }
+.rate-badge.r-fine { background: var(--fine); }
+.rate-badge.r-not_worth { background: var(--notworth); }
+.rate-badge.r-didnt_finish { background: #5c6b7a; }
+.collapsed-note-hint { font-size: 12px; color: var(--muted); }
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* Rating history */
+.history-search {
+  width: 100%;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 16px 0 4px;
+}
+.history-entry {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 10px 0;
+}
+.history-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.history-title { color: var(--text); text-decoration: none; font-weight: 600; flex: 1; min-width: 200px; }
+.history-title:hover { color: var(--accent); }
+.history-head .meta { margin: 0; white-space: nowrap; }
+.history-notes { margin-top: 6px; }
+.history-notes summary { font-size: 12.5px; color: var(--accent); cursor: pointer; }
+.history-notes pre {
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 13px;
+  color: #3c3c3f;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0 0;
+}
+.history-note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.history-editor { margin-top: 8px; }
 .note-box {
   width: 100%;
   margin-top: 8px;

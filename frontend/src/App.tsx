@@ -3,13 +3,16 @@ import { api } from "./api";
 import { usePipeline } from "./hooks/usePipeline";
 import { ChatPage } from "./pages/ChatPage";
 import { FeedPage } from "./pages/FeedPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { SourcesPage } from "./pages/SourcesPage";
 import { InstructionsPanel } from "./components/InstructionsPanel";
 import { CostWidget } from "./components/CostWidget";
 import { RunStatus } from "./components/RunStatus";
 
 export default function App() {
-  const [tab, setTab] = useState<"feed" | "instructions" | "sources" | "chat">("feed");
+  const [tab, setTab] = useState<
+    "feed" | "instructions" | "sources" | "chat" | "history"
+  >("feed");
   const [feedVersion, setFeedVersion] = useState(0);
   const [chatPending, setChatPending] = useState(false);
   const onFinished = useCallback(() => setFeedVersion((v) => v + 1), []);
@@ -52,6 +55,12 @@ export default function App() {
           >
             Chat{chatPending && <span className="tab-dot" title="The agent has a question for you" />}
           </button>
+          <button
+            className={tab === "history" ? "tab active" : "tab"}
+            onClick={() => setTab("history")}
+          >
+            History
+          </button>
         </nav>
         <div className="run-controls">
           <CostWidget runVersion={feedVersion} />
@@ -69,6 +78,7 @@ export default function App() {
       )}
       {tab === "sources" && <SourcesPage />}
       {tab === "chat" && <ChatPage onSeen={() => setChatPending(false)} />}
+      {tab === "history" && <HistoryPage />}
     </div>
   );
 }

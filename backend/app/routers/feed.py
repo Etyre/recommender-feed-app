@@ -171,6 +171,44 @@ def rate_item(item_id: int, body: RatingIn, conn: sqlite3.Connection = Depends(g
     return {"ok": True}
 
 
+@router.get("/ratings")
+def rating_history(q: str = "", conn: sqlite3.Connection = Depends(get_db)):
+    """Latest rating per item, reverse chronological, searchable across titles and notes."""
+    where = "r.id IN (SELECT MAX(id) FROM ratings GROUP BY item_id)"
+    params: list = []
+    if q.strip():
+        like = f"%{q.strip()}%"
+        where += (
+            " AND (i.title LIKE ? OR IFNULL(r.note,'') LIKE ? "
+            "OR IFNULL(r.reading_notes,'') LIKE ?)"
+        )
+        params = [like, like, like]
+    rows = conn.execute(
+        f"""SELECT r.rating, r.note, r.reading_notes, r.created_at AS rated_at,
+                   i.id AS item_id, i.title, i.url, i.found_by, s.name AS source_name
+            FROM ratings r
+            JOIN items i ON i.id = r.item_id
+            LEFT JOIN sources s ON s.id = i.source_id
+            WHERE {where}
+            ORDER BY r.id DESC LIMIT 200""",
+        params,
+    ).fetchall()
+    return [
+        {
+            "item_id": r["item_id"],
+            "title": r["title"],
+            "url": r["url"],
+            "source": r["source_name"]
+            or {"discovery": "web discovery", "user": "added by you"}.get(r["found_by"]),
+            "rating": r["rating"],
+            "note": r["note"],
+            "reading_notes": r["reading_notes"],
+            "rated_at": r["rated_at"],
+        }
+        for r in rows
+    ]
+
+
 @router.get("/profile")
 def get_profile(conn: sqlite3.Connection = Depends(get_db)):
     row = get_latest_profile(conn)

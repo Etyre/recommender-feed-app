@@ -56,6 +56,17 @@ export interface Instruction {
   agent_status_note: string | null;
 }
 
+export interface RatingEntry {
+  item_id: number;
+  title: string;
+  url: string;
+  source: string | null;
+  rating: Rating;
+  note: string | null;
+  reading_notes: string | null;
+  rated_at: string;
+}
+
 export interface ChatMessage {
   id: number;
   role: "agent" | "user";
