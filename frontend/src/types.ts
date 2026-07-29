@@ -72,7 +72,7 @@ export interface ChatMessage {
   role: "agent" | "user";
   content: string;
   created_at: string;
-  proposals: { text: string; kind: string }[];
+  proposals: { text: string; kind: string; added?: boolean }[];
 }
 
 export interface DailyUsage {

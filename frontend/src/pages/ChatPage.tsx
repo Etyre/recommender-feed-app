@@ -7,7 +7,6 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [addedProposals, setAddedProposals] = useState<Set<string>>(new Set());
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,9 +40,9 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
     }
   };
 
-  const addProposal = async (key: string, text: string, kind: "quest" | "standing") => {
-    await api.addInstruction(text, kind);
-    setAddedProposals((s) => new Set(s).add(key));
+  const addProposal = async (messageId: number, index: number) => {
+    const all = await api.acceptProposal(messageId, index);
+    setMessages(all);
   };
 
   return (
@@ -63,23 +62,16 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
             <div className="bubble-content">{m.content}</div>
             {m.proposals.length > 0 && (
               <div className="proposal-chips">
-                {m.proposals.map((p, j) => {
-                  const key = `${m.id}-${j}`;
-                  const added = addedProposals.has(key);
-                  return (
-                    <button
-                      key={key}
-                      className="proposal-chip"
-                      disabled={added}
-                      onClick={() =>
-                        addProposal(key, p.text, p.kind === "quest" ? "quest" : "standing")
-                      }
-                    >
-                      {added ? "✓ added" : `+ ${p.kind}: `}
-                      {added ? "" : p.text}
-                    </button>
-                  );
-                })}
+                {m.proposals.map((p, j) => (
+                  <button
+                    key={`${m.id}-${j}`}
+                    className="proposal-chip"
+                    disabled={!!p.added}
+                    onClick={() => addProposal(m.id, j)}
+                  >
+                    {p.added ? `✓ added ${p.kind}: ${p.text}` : `+ ${p.kind}: ${p.text}`}
+                  </button>
+                ))}
               </div>
             )}
           </div>

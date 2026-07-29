@@ -75,4 +75,8 @@ export const api = {
   conversation: () => fetch("/api/conversation").then((r) => j<ChatMessage[]>(r)),
   sendChat: (message: string | null) =>
     post("/api/conversation", { message }).then((r) => j<ChatMessage[]>(r)),
+  acceptProposal: (messageId: number, index: number) =>
+    post(`/api/conversation/proposals/${messageId}/${index}/accept`).then((r) =>
+      j<ChatMessage[]>(r)
+    ),
 };
