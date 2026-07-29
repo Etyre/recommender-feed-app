@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Instruction } from "../types";
+import { Linkify } from "./Linkify";
 
 /** "keep_looking: text" -> "still looking — text"; "likely_satisfied: ..." -> "likely satisfied — ..." */
 function formatAgentNote(note: string): string {
@@ -86,7 +87,9 @@ export function InstructionsPanel() {
               </div>
               {i.agent_status_note && (
                 <div className="agent-note">
-                  <span>🤖 {formatAgentNote(i.agent_status_note)}</span>
+                  <span>
+                    🤖 <Linkify text={formatAgentNote(i.agent_status_note)} />
+                  </span>
                   {i.kind === "quest" && (
                     <button onClick={() => setStatus(i.id, "satisfied")}>confirm done</button>
                   )}

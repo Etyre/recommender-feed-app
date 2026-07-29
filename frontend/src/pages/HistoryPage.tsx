@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { RatingEntry } from "../types";
+import { Linkify } from "../components/Linkify";
 import { RATING_LABELS, RatingWidget } from "../components/RatingWidget";
 
 function fmt(iso: string): string {
@@ -72,10 +73,16 @@ export function HistoryPage() {
               {r.reading_notes && (
                 <details className="history-notes">
                   <summary>reading notes ({r.reading_notes.length} chars)</summary>
-                  <pre>{r.reading_notes}</pre>
+                  <pre>
+                    <Linkify text={r.reading_notes} />
+                  </pre>
                 </details>
               )}
-              {r.note && <p className="history-note">→ to the AI: {r.note}</p>}
+              {r.note && (
+                <p className="history-note">
+                  → to the AI: <Linkify text={r.note} />
+                </p>
+              )}
             </>
           )}
         </div>

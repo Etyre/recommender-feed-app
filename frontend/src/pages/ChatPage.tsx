@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { ChatMessage } from "../types";
+import { Linkify } from "../components/Linkify";
 
 export function ChatPage({ onSeen }: { onSeen: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -59,7 +60,9 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
         )}
         {messages.map((m, i) => (
           <div key={m.id === -1 ? `tmp-${i}` : m.id} className={`bubble bubble-${m.role}`}>
-            <div className="bubble-content">{m.content}</div>
+            <div className="bubble-content">
+              <Linkify text={m.content} />
+            </div>
             {m.proposals.length > 0 && (
               <div className="proposal-chips">
                 {m.proposals.map((p, j) => (
