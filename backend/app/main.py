@@ -25,6 +25,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Recommender Feed", lifespan=lifespan)
 
+
+@app.middleware("http")
+async def no_cache_html(request, call_next):
+    """Never let the browser cache index.html — otherwise a stale shell keeps
+    loading old JS bundles after rebuilds. Hashed assets stay cacheable."""
+    response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
