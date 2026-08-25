@@ -47,6 +47,27 @@ Schedule it (7:30 / 12:30 / 17:30 / 21:30 daily via launchd; missed runs coalesc
 make schedule
 ```
 
+### Always-on (no terminal needed)
+
+```bash
+make install      # builds, then registers a launchd agent: starts at login, restarts on crash
+make restart      # after code changes: rebuild + bounce
+make status       # show server + pipeline launchd state
+make uninstall
+```
+
+The app is then permanently at http://localhost:8000. To get a dock icon / standalone
+window, open that URL in Chrome and choose **⋮ → Cast, save, and share → Install page as
+app** (the site ships a PWA manifest).
+
+**macOS caveat:** launchd-spawned processes cannot read files under `~/Documents`,
+`~/Desktop`, or `~/Downloads` (TCC privacy protection — they fail with "Operation not
+permitted" and no prompt is shown). If this repo lives there, both `make install` and
+`make schedule` jobs will die on startup. Either keep the checkout somewhere unprotected
+(e.g. `~/Developer/`, with a symlink from `~/Documents` if you like), or grant
+**Full Disk Access** to the Python binary in System Settings → Privacy & Security.
+`launchd/*.plist` are templates; `make` substitutes `__REPO__` with the checkout path.
+
 ## How it learns
 
 - **Ratings** — 4 tiers: critical / worth it / fine / not worth it. Rate after reading.

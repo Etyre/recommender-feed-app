@@ -6,14 +6,14 @@
   <string>com.elityre.feedapp.pipeline</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/elityre/Documents/Programming/recommender-feed-app/backend/.venv/bin/python</string>
+    <string>__REPO__/backend/.venv/bin/python</string>
     <string>-m</string>
     <string>app.pipeline</string>
     <string>--trigger</string>
     <string>scheduled</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/elityre/Documents/Programming/recommender-feed-app/backend</string>
+  <string>__REPO__/backend</string>
   <!-- Calendar intervals coalesce during sleep: missed runs collapse into one on wake. -->
   <key>StartCalendarInterval</key>
   <array>
@@ -23,8 +23,8 @@
     <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>30</integer></dict>
   </array>
   <key>StandardOutPath</key>
-  <string>/Users/elityre/Documents/Programming/recommender-feed-app/data/logs/pipeline.log</string>
+  <string>__REPO__/data/logs/pipeline.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/elityre/Documents/Programming/recommender-feed-app/data/logs/pipeline.err</string>
+  <string>__REPO__/data/logs/pipeline.err</string>
 </dict>
 </plist>
