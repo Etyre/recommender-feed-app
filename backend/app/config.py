@@ -4,7 +4,24 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
 REPO_ROOT = BACKEND_DIR.parent
-DATA_DIR = Path(os.environ.get("FEEDAPP_DATA_DIR", REPO_ROOT / "data"))
+
+
+def _default_data_dir() -> Path:
+    """Where the private data lives when FEEDAPP_DATA_DIR is unset.
+
+    Preferred layout keeps data OUTSIDE the git checkout, as a sibling:
+        <parent>/code   <- this repo
+        <parent>/data   <- feed.db, .env, backups/, logs/   (never in git)
+    If no sibling data/ exists (e.g. a standalone clone), fall back to <repo>/data,
+    which is gitignored.
+    """
+    sibling = REPO_ROOT.parent / "data"
+    if sibling.is_dir():
+        return sibling
+    return REPO_ROOT / "data"
+
+
+DATA_DIR = Path(os.environ.get("FEEDAPP_DATA_DIR") or _default_data_dir()).resolve()
 DB_PATH = DATA_DIR / "feed.db"
 LOG_DIR = DATA_DIR / "logs"
 LOCK_PATH = DATA_DIR / "pipeline.lock"

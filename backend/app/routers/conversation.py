@@ -53,7 +53,7 @@ def accept_proposal(
 @router.post("/conversation")
 def send_message(body: ChatIn, conn: sqlite3.Connection = Depends(get_db)):
     if not has_llm_credentials():
-        raise HTTPException(400, "no Anthropic credentials configured (data/.env)")
+        raise HTTPException(400, "no Anthropic credentials configured (<data dir>/.env)")
     usage = UsageTracker()
     message = body.message.strip() if body.message else None
     try:

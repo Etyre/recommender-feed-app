@@ -95,7 +95,7 @@ def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
         run_stage("interview", lambda: interview.maybe_ask(conn, usage))
     else:
         errors.append(
-            "no Anthropic credentials found (set ANTHROPIC_API_KEY in data/.env); "
+            "no Anthropic credentials found (set ANTHROPIC_API_KEY in <data dir>/.env; see `make where`); "
             "skipped triage/discovery/ranking — feed will show chronological order"
         )
     # Always last, and always runs: snapshot + JSON export + iCloud mirror of the

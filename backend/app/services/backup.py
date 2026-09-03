@@ -83,7 +83,7 @@ def run_backup(conn: sqlite3.Connection) -> dict:
     if not _quick_check(conn):
         raise RuntimeError(
             "live database FAILED integrity check — existing backups left untouched; "
-            "restore from data/backups/ before writing anything else"
+            "restore from <data dir>/backups/ before writing anything else"
         )
 
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -95,6 +95,9 @@ def run_backup(conn: sqlite3.Connection) -> dict:
     dest = sqlite3.connect(tmp_path)
     try:
         conn.backup(dest)
+        # The copy inherits WAL mode from the live DB; switch it to a single self-contained
+        # file so the snapshot has no -wal/-shm siblings and can be restored by copying.
+        dest.execute("PRAGMA journal_mode=DELETE")
         verified = _quick_check(dest)
     finally:
         dest.close()

@@ -4,7 +4,7 @@
 <dict>
   <key>Label</key>
   <string>com.elityre.feedapp.server</string>
-  <!-- __REPO__ is substituted by `make install`. -->
+  <!-- __REPO__ and __DATA__ are substituted by `make install` / `make schedule`. -->
   <key>ProgramArguments</key>
   <array>
     <string>__REPO__/backend/.venv/bin/python</string>
@@ -18,6 +18,11 @@
   </array>
   <key>WorkingDirectory</key>
   <string>__REPO__/backend</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>FEEDAPP_DATA_DIR</key>
+    <string>__DATA__</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
   <!-- Restart whenever it exits (crash, or `make restart`). -->
@@ -26,8 +31,8 @@
   <key>ThrottleInterval</key>
   <integer>5</integer>
   <key>StandardOutPath</key>
-  <string>__REPO__/data/logs/server.log</string>
+  <string>__DATA__/logs/server.log</string>
   <key>StandardErrorPath</key>
-  <string>__REPO__/data/logs/server.log</string>
+  <string>__DATA__/logs/server.log</string>
 </dict>
 </plist>

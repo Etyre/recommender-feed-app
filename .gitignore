@@ -1,8 +1,18 @@
+# Private data — never commit. Preferred layout keeps it outside the checkout
+# entirely (../data); these rules are belt-and-suspenders for standalone clones.
 data/
+backups/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+.env
+.env.*
+
 backend/.venv/
 frontend/node_modules/
 frontend/dist/
 __pycache__/
 *.pyc
 .DS_Store
-.env

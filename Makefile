@@ -1,4 +1,8 @@
 REPO := $(shell pwd)
+# Private data dir (db, .env, backups, logs). Mirrors backend/app/config.py: env var,
+# else the sibling ../data (data kept outside the git checkout), else ./data.
+DATA := $(or $(FEEDAPP_DATA_DIR),$(if $(wildcard $(REPO)/../data/.),$(abspath $(REPO)/../data),$(REPO)/data))
+export FEEDAPP_DATA_DIR := $(DATA)
 VENV := backend/.venv
 PY := $(VENV)/bin/python
 SERVER_LABEL := com.elityre.feedapp.server
@@ -6,11 +10,13 @@ PIPELINE_LABEL := com.elityre.feedapp.pipeline
 AGENTS := $(HOME)/Library/LaunchAgents
 UID_ := $(shell id -u)
 
-.PHONY: setup dev-backend dev-frontend build run pipeline backup seed \
+.PHONY: setup dev-backend dev-frontend build run pipeline backup seed where \
         install uninstall restart schedule unschedule status
 
 setup: $(VENV) frontend/node_modules
-	@echo "Setup done. Put your API key in data/.env:  ANTHROPIC_API_KEY=sk-ant-..."
+	@mkdir -p $(DATA)
+	@echo "Setup done. Data dir: $(DATA)"
+	@echo "Put your API key in $(DATA)/.env:  ANTHROPIC_API_KEY=sk-ant-..."
 
 $(VENV):
 	python3 -m venv $(VENV)
@@ -44,12 +50,16 @@ backup:
 seed:
 	cd backend && .venv/bin/python -m app.seed
 
+where:
+	@echo "repo: $(REPO)"
+	@echo "data: $(DATA)"
+
 # ---- launchd -----------------------------------------------------------------
-# Plists in launchd/ are templates: __REPO__ is replaced with this checkout's path.
+# Plists in launchd/ are templates: __REPO__ -> this checkout, __DATA__ -> the data dir.
 
 define install_plist
-	mkdir -p data/logs $(AGENTS)
-	sed 's|__REPO__|$(REPO)|g' launchd/$(1).plist > $(AGENTS)/$(1).plist
+	mkdir -p $(DATA)/logs $(AGENTS)
+	sed -e 's|__REPO__|$(REPO)|g' -e 's|__DATA__|$(DATA)|g' launchd/$(1).plist > $(AGENTS)/$(1).plist
 	-launchctl bootout gui/$(UID_)/$(1) 2>/dev/null
 	launchctl bootstrap gui/$(UID_) $(AGENTS)/$(1).plist
 endef
@@ -57,7 +67,7 @@ endef
 # Always-on server: starts at login, restarts if it dies. App lives at http://localhost:8000
 install: build
 	$(call install_plist,$(SERVER_LABEL))
-	@echo "Installed. The app is always at http://localhost:8000 (logs: data/logs/server.log)."
+	@echo "Installed. The app is always at http://localhost:8000 (logs: $(DATA)/logs/server.log)."
 
 uninstall:
 	-launchctl bootout gui/$(UID_)/$(SERVER_LABEL)

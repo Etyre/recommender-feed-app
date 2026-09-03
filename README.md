@@ -10,12 +10,24 @@ quests and can propose new permanent sources, which only you can approve.
 
 ## Setup
 
-```bash
-make setup                                # python venv + npm install
-mkdir -p data
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > data/.env
-chmod 600 data/.env
+Recommended layout keeps your private data **outside** the git checkout:
+
 ```
+recommender-feed/
+├── code/   ← this repo (safe to publish; contains no data)
+└── data/   ← feed.db, .env, backups/, logs/  (never touched by git)
+```
+
+```bash
+mkdir -p recommender-feed && cd recommender-feed
+git clone <this repo> code && mkdir data
+cd code && make setup                     # python venv + npm install
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../data/.env
+chmod 600 ../data/.env
+```
+
+The app resolves the data dir as: `$FEEDAPP_DATA_DIR` if set, else a sibling `../data`
+if it exists, else `./data` inside the checkout (gitignored). `make where` prints both paths.
 
 Without an API key the app still runs: it fetches RSS sources and shows a chronological
 feed; triage/ranking/discovery are skipped.
@@ -90,7 +102,7 @@ the Refresh button.
   `app/pipeline` is the orchestrator (`python -m app.pipeline`), same code path for
   launchd and the UI's Refresh button.
 - `frontend/` — React + Vite, talks only to `/api/*`.
-- `data/` — SQLite db, logs, `.env`. Gitignored.
+- `../data/` (sibling of the checkout) — SQLite db, logs, `.env`, `backups/`. Never in git.
 
 ## Converting to a hosted webapp later
 
