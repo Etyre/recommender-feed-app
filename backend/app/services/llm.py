@@ -1,13 +1,29 @@
 """Anthropic client wrapper: model constants, structured outputs, usage/cost accounting,
-refusal handling. Every LLM stage goes through here."""
+refusal handling. Every LLM stage goes through here.
+
+This is also where the agent-coding LLM standard is enforced for every call site:
+the shared preamble (shared/llm-system-prompt-preamble.md) is prepended to every
+system prompt, the `contact_eli` tool is offered on every call, and every response is
+checked with llm_contact.check(). If the model contacts Eli, LLMContacted is raised and
+the caller must stop the task it was doing (no retry, no pushing past it)."""
 from __future__ import annotations
 
 import json
 import re
+import sys
+from pathlib import Path
 from typing import Any, Type, TypeVar
 
 import anthropic
 from pydantic import BaseModel
+
+SHARED_DIR = Path.home() / "Documents/agent-coding/shared"
+if str(SHARED_DIR) not in sys.path:
+    sys.path.insert(0, str(SHARED_DIR))
+import llm_contact  # noqa: E402  (shared/llm_contact.py, standard library only)
+
+APP_NAME = "recommender-feed"
+CONTACT_TOOL = llm_contact.CONTACT_TOOL
 
 # USD per million tokens (input, output)
 PRICES = {
@@ -20,6 +36,18 @@ T = TypeVar("T", bound=BaseModel)
 
 class LLMRefusal(Exception):
     pass
+
+
+class LLMContacted(Exception):
+    """The model used `contact_eli` or wrote an `@ELI:` line. The contact has already been
+    recorded in the LLM inbox and Eli notified; whatever task triggered this call must stop."""
+
+    def __init__(self, record: dict):
+        self.record = record
+        super().__init__(
+            f"the model asked to talk to Eli (llm-inbox show {record.get('id')}): "
+            f"{str(record.get('message', ''))[:200]}"
+        )
 
 
 class UsageTracker:
@@ -60,6 +88,36 @@ def get_client() -> anthropic.Anthropic:
     return _client
 
 
+def with_preamble(system: Any) -> Any:
+    """Prepend the shared preamble, word for word, to a system prompt given either as a
+    string or as a list of text blocks (the first block keeps its cache_control)."""
+    if isinstance(system, str):
+        return llm_contact.system_prompt(system)
+    if isinstance(system, list) and system:
+        first = dict(system[0])
+        first["text"] = llm_contact.system_prompt(first.get("text", ""))
+        return [first] + list(system[1:])
+    return llm_contact.system_prompt("")
+
+
+def _plain_response(resp: Any) -> Any:
+    """SDK response -> JSON dict. messages.parse() results carry Pydantic generics that make the
+    default serializer print a wall of warnings; dump them quietly and drop the parsed copy."""
+    try:
+        return resp.model_dump(mode="json", warnings=False, exclude={"parsed_output"})
+    except Exception:  # noqa: BLE001 - fall back to whatever llm_contact can make of it
+        return resp
+
+
+def _after_response(model: str, system: Any, messages: list, resp: Any, tools: list) -> None:
+    record = llm_contact.check(
+        app=APP_NAME, model=model, system=system, messages=messages,
+        response=_plain_response(resp), tools=tools,
+    )
+    if record:
+        raise LLMContacted(record)
+
+
 def _check_refusal(resp: Any) -> None:
     if resp.stop_reason == "refusal":
         detail = getattr(resp, "stop_details", None)
@@ -75,15 +133,19 @@ def parse_structured_messages(
     max_tokens: int = 4000,
     usage: UsageTracker | None = None,
 ) -> T:
+    system = with_preamble(system)
+    tools = [CONTACT_TOOL]
     resp = get_client().messages.parse(
         model=model,
         max_tokens=max_tokens,
         system=system,
         messages=messages,
+        tools=tools,
         output_format=output_model,
     )
     if usage is not None:
         usage.add(model, resp.usage)
+    _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
     if resp.stop_reason == "max_tokens":
         # Thinking + output share max_tokens; a truncated grammar-constrained reply
@@ -122,14 +184,19 @@ def generate_text(
     max_tokens: int = 8000,
     usage: UsageTracker | None = None,
 ) -> str:
+    system = with_preamble(system)
+    tools = [CONTACT_TOOL]
+    messages = [{"role": "user", "content": user_content}]
     resp = get_client().messages.create(
         model=model,
         max_tokens=max_tokens,
         system=system,
-        messages=[{"role": "user", "content": user_content}],
+        messages=messages,
+        tools=tools,
     )
     if usage is not None:
         usage.add(model, resp.usage)
+    _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
     return "".join(b.text for b in resp.content if b.type == "text")
 
@@ -146,7 +213,11 @@ def run_with_web_search(
 ) -> str:
     """Agentic call with the server-side web_search tool. Returns final text output.
     Handles pause_turn continuation (server-side search loop hit its iteration cap)."""
-    tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": max_uses}]
+    system = with_preamble(system)
+    tools = [
+        CONTACT_TOOL,
+        {"type": "web_search_20260209", "name": "web_search", "max_uses": max_uses},
+    ]
     messages: list[dict] = [{"role": "user", "content": user_content}]
     resp = None
     for _ in range(max_continuations + 1):
@@ -159,6 +230,7 @@ def run_with_web_search(
         )
         if usage is not None:
             usage.add(model, resp.usage)
+        _after_response(model, system, messages, resp, tools)
         if resp.stop_reason == "pause_turn":
             messages = messages + [{"role": "assistant", "content": resp.content}]
             continue

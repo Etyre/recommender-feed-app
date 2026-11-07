@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useDraft } from "../hooks/useDraft";
 import type { RatingEntry } from "../types";
 import { Linkify } from "../components/Linkify";
 import { RATING_LABELS, RatingWidget } from "../components/RatingWidget";
@@ -11,7 +12,7 @@ function fmt(iso: string): string {
 }
 
 export function HistoryPage() {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useDraft("history:search");
   const [rows, setRows] = useState<RatingEntry[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
 

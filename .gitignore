@@ -9,10 +9,27 @@ backups/
 *.sqlite3
 .env
 .env.*
+!.env.example
+*.log
 
+# Build output and dependencies
+.venv/
 backend/.venv/
+node_modules/
 frontend/node_modules/
+dist/
 frontend/dist/
+build/
+out/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Large exports / media
+*.csv
+*.xlsx
+*.json.gz
+*.mp3
+*.mp4
+*.mov
+*.wav

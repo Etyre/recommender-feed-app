@@ -118,6 +118,8 @@ def triage_pending(conn: sqlite3.Connection, usage: llm.UsageTracker) -> dict:
         try:
             state = _apply_triage(conn, system, row, usage)
             consecutive_errors = 0
+        except llm.LLMContacted:
+            raise  # the model asked to talk to Eli: stop triaging, do not move on to the next item
         except Exception:  # noqa: BLE001 - leave as 'new', retried next run
             stats["errors"] += 1
             consecutive_errors += 1

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.elityre.feedapp.pipeline</string>
+  <string>com.elityre.recommender-feed.pipeline</string>
   <key>ProgramArguments</key>
   <array>
     <string>__REPO__/backend/.venv/bin/python</string>
@@ -28,8 +28,8 @@
     <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>30</integer></dict>
   </array>
   <key>StandardOutPath</key>
-  <string>__DATA__/logs/pipeline.log</string>
+  <string>__LOGS__/recommender-feed.log</string>
   <key>StandardErrorPath</key>
-  <string>__DATA__/logs/pipeline.err</string>
+  <string>__LOGS__/recommender-feed.log</string>
 </dict>
 </plist>

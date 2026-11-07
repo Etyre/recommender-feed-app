@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { api } from "../api";
+import { useDraft } from "../hooks/useDraft";
 
 export function AddSourceForm({ onAdded }: { onAdded: () => void }) {
-  const [url, setUrl] = useState("");
-  const [name, setName] = useState("");
+  const [url, setUrl, clearUrl] = useDraft("sources:add:url");
+  const [name, setName, clearName] = useDraft("sources:add:name");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -18,8 +19,8 @@ export function AddSourceForm({ onAdded }: { onAdded: () => void }) {
           ? `Added — found feed: ${source.feed_url}`
           : "Added — no RSS feed found; the page will be scanned for new links each run."
       );
-      setUrl("");
-      setName("");
+      clearUrl();
+      clearName();
       onAdded();
     } catch (e) {
       setMessage(`Failed: ${e instanceof Error ? e.message : e}`);

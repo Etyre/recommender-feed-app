@@ -5,12 +5,16 @@ DATA := $(or $(FEEDAPP_DATA_DIR),$(if $(wildcard $(REPO)/../data/.),$(abspath $(
 export FEEDAPP_DATA_DIR := $(DATA)
 VENV := backend/.venv
 PY := $(VENV)/bin/python
-SERVER_LABEL := com.elityre.feedapp.server
-PIPELINE_LABEL := com.elityre.feedapp.pipeline
+SERVER_LABEL := com.elityre.recommender-feed.server
+PIPELINE_LABEL := com.elityre.recommender-feed.pipeline
+# Labels used before 2026-11-07; install/schedule boot them out so only the new ones run.
+OLD_SERVER_LABEL := com.elityre.feedapp.server
+OLD_PIPELINE_LABEL := com.elityre.feedapp.pipeline
+LOGS := $(HOME)/Library/Logs
 AGENTS := $(HOME)/Library/LaunchAgents
 UID_ := $(shell id -u)
 
-.PHONY: setup dev-backend dev-frontend build run pipeline backup seed where \
+.PHONY: setup dev-backend dev-frontend build run pipeline backup seed where test logs \
         install uninstall restart schedule unschedule status
 
 setup: $(VENV) frontend/node_modules
@@ -53,25 +57,37 @@ seed:
 where:
 	@echo "repo: $(REPO)"
 	@echo "data: $(DATA)"
+	@echo "logs: $(LOGS)/recommender-feed.log  $(LOGS)/recommender-feed-server.log"
+
+# End-to-end dry run against a throwaway data dir (no API key, no real DB, no iCloud).
+test:
+	./test.sh
+
+logs:
+	tail -f $(LOGS)/recommender-feed.log
 
 # ---- launchd -----------------------------------------------------------------
-# Plists in launchd/ are templates: __REPO__ -> this checkout, __DATA__ -> the data dir.
+# Plists in launchd/ are templates: __REPO__ -> this checkout, __DATA__ -> the data dir,
+# __LOGS__ -> ~/Library/Logs. $(2) is the pre-2026-11 label to retire, if still loaded.
 
 define install_plist
-	mkdir -p $(DATA)/logs $(AGENTS)
-	sed -e 's|__REPO__|$(REPO)|g' -e 's|__DATA__|$(DATA)|g' launchd/$(1).plist > $(AGENTS)/$(1).plist
+	mkdir -p $(DATA)/logs $(AGENTS) $(LOGS)
+	sed -e 's|__REPO__|$(REPO)|g' -e 's|__DATA__|$(DATA)|g' -e 's|__LOGS__|$(LOGS)|g' launchd/$(1).plist > $(AGENTS)/$(1).plist
+	-launchctl bootout gui/$(UID_)/$(2) 2>/dev/null
+	rm -f $(AGENTS)/$(2).plist
 	-launchctl bootout gui/$(UID_)/$(1) 2>/dev/null
 	launchctl bootstrap gui/$(UID_) $(AGENTS)/$(1).plist
 endef
 
 # Always-on server: starts at login, restarts if it dies. App lives at http://localhost:8000
 install: build
-	$(call install_plist,$(SERVER_LABEL))
-	@echo "Installed. The app is always at http://localhost:8000 (logs: $(DATA)/logs/server.log)."
+	$(call install_plist,$(SERVER_LABEL),$(OLD_SERVER_LABEL))
+	@echo "Installed. The app is always at http://localhost:8000 (log: $(LOGS)/recommender-feed-server.log)."
 
 uninstall:
 	-launchctl bootout gui/$(UID_)/$(SERVER_LABEL)
-	rm -f $(AGENTS)/$(SERVER_LABEL).plist
+	-launchctl bootout gui/$(UID_)/$(OLD_SERVER_LABEL) 2>/dev/null
+	rm -f $(AGENTS)/$(SERVER_LABEL).plist $(AGENTS)/$(OLD_SERVER_LABEL).plist
 
 # After changing backend or frontend code: rebuild and bounce the server.
 restart: build
@@ -79,12 +95,13 @@ restart: build
 
 # Pipeline runs at 7:30 / 12:30 / 17:30 / 21:30; missed runs coalesce on wake.
 schedule:
-	$(call install_plist,$(PIPELINE_LABEL))
-	@echo "Scheduled: pipeline runs at 7:30, 12:30, 17:30, 21:30."
+	$(call install_plist,$(PIPELINE_LABEL),$(OLD_PIPELINE_LABEL))
+	@echo "Scheduled: pipeline runs at 7:30, 12:30, 17:30, 21:30 (log: $(LOGS)/recommender-feed.log)."
 
 unschedule:
 	-launchctl bootout gui/$(UID_)/$(PIPELINE_LABEL)
-	rm -f $(AGENTS)/$(PIPELINE_LABEL).plist
+	-launchctl bootout gui/$(UID_)/$(OLD_PIPELINE_LABEL) 2>/dev/null
+	rm -f $(AGENTS)/$(PIPELINE_LABEL).plist $(AGENTS)/$(OLD_PIPELINE_LABEL).plist
 
 status:
 	@for l in $(SERVER_LABEL) $(PIPELINE_LABEL); do \

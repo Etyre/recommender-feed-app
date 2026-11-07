@@ -9,6 +9,7 @@ from ..config import has_llm_credentials
 from ..schemas import LinkIn, ProfileIn, RatingIn, StateIn
 from ..services.common import get_latest_profile, set_item_state
 from ..services.fetching import add_user_item
+from ..services.llm import LLMContacted
 from ..services.triage import triage_single
 from .deps import get_db
 
@@ -135,6 +136,8 @@ def add_link(body: LinkIn, conn: sqlite3.Connection = Depends(get_db)):
     if has_llm_credentials():
         try:
             triage_single(conn, item_id)  # instant summary; pipeline retries on failure
+        except LLMContacted as e:
+            raise HTTPException(409, f"link saved, but {e}")
         except Exception:  # noqa: BLE001
             pass
     row = conn.execute(

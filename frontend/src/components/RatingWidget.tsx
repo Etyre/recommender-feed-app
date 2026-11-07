@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { api } from "../api";
+import { useDraft } from "../hooks/useDraft";
 import type { Rating } from "../types";
 
 export const RATING_LABELS: Record<Rating, string> = {
@@ -34,8 +35,12 @@ export function RatingWidget({
   onSaved?: () => void;
 }) {
   const [rating, setRating] = useState<Rating | null>(initialRating);
-  const [note, setNote] = useState(initialNote ?? "");
-  const [readingNotes, setReadingNotes] = useState(initialReadingNotes ?? "");
+  // Unsaved edits survive collapsing, tab switches and reloads; cleared once saved.
+  const [note, setNote, clearNoteDraft] = useDraft(`rating:${itemId}:note`, initialNote ?? "");
+  const [readingNotes, setReadingNotes, clearReadingDraft] = useDraft(
+    `rating:${itemId}:readingNotes`,
+    initialReadingNotes ?? ""
+  );
   const [expanded, setExpanded] = useState(startExpanded ?? !initialRating);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const lastSaved = useRef({ note: initialNote ?? "", readingNotes: initialReadingNotes ?? "" });
@@ -49,6 +54,9 @@ export function RatingWidget({
       .rate(itemId, nextRating, note.trim() || undefined, readingNotes.trim() || undefined)
       .then(() => {
         lastSaved.current = { note, readingNotes };
+        // Saved on the server now; drop the local drafts but keep the text on screen.
+        clearNoteDraft(note);
+        clearReadingDraft(readingNotes);
         setSaveState("saved");
         if (collapseAfter) {
           setExpanded(false);

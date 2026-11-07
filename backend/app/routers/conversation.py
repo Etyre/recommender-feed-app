@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..config import QUEST_DEFAULT_DAYS, has_llm_credentials
 from ..schemas import ChatIn
 from ..services import interview
-from ..services.llm import UsageTracker
+from ..services.llm import LLMContacted, UsageTracker
 from .deps import get_db
 
 router = APIRouter()
@@ -58,6 +58,9 @@ def send_message(body: ChatIn, conn: sqlite3.Connection = Depends(get_db)):
     message = body.message.strip() if body.message else None
     try:
         interview.converse(conn, message or None, usage)
+    except LLMContacted as e:
+        # Already recorded in the LLM inbox and Eli notified; the chat stops here.
+        raise HTTPException(409, str(e))
     finally:
         summary = usage.summary()
         if summary["calls"]:

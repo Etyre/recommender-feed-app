@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { api } from "../api";
+import { useDraft } from "../hooks/useDraft";
 import type { FeedItem } from "../types";
 import { RatingWidget } from "./RatingWidget";
 
 /** Save an arbitrary URL into the feed. Lives on the Instructions page. */
 export function AddLinkPanel() {
-  const [url, setUrl] = useState("");
+  const [url, setUrl, clearUrl] = useDraft("feed:add-link:url");
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<FeedItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +18,7 @@ export function AddLinkPanel() {
     try {
       const item = await api.addLink(url.trim());
       setAdded((prev) => [item, ...prev]);
-      setUrl("");
+      clearUrl();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

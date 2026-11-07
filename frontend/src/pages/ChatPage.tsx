@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { useDraft } from "../hooks/useDraft";
 import type { ChatMessage } from "../types";
 import { Linkify } from "../components/Linkify";
 
 export function ChatPage({ onSeen }: { onSeen: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput, clearInput] = useDraft("chat:input");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -28,7 +29,7 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
         ...m,
         { id: -1, role: "user", content: text, created_at: "", proposals: [] },
       ]);
-      setInput("");
+      clearInput();
     }
     try {
       const all = await api.sendChat(text);
@@ -36,6 +37,8 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
       onSeen();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      // Failed send: put the draft back so nothing typed is lost.
+      if (text) setInput(text);
     } finally {
       setBusy(false);
     }

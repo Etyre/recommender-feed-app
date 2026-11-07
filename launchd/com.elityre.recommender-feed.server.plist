@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.elityre.feedapp.server</string>
-  <!-- __REPO__ and __DATA__ are substituted by `make install` / `make schedule`. -->
+  <string>com.elityre.recommender-feed.server</string>
+  <!-- __REPO__, __DATA__ and __LOGS__ are substituted by `make install` / `make schedule`. -->
   <key>ProgramArguments</key>
   <array>
     <string>__REPO__/backend/.venv/bin/python</string>
@@ -31,8 +31,8 @@
   <key>ThrottleInterval</key>
   <integer>5</integer>
   <key>StandardOutPath</key>
-  <string>__DATA__/logs/server.log</string>
+  <string>__LOGS__/recommender-feed-server.log</string>
   <key>StandardErrorPath</key>
-  <string>__DATA__/logs/server.log</string>
+  <string>__LOGS__/recommender-feed-server.log</string>
 </dict>
 </plist>

@@ -1,3 +1,13 @@
+"""Recommender Feed API server: FastAPI app serving /api/* and the built frontend.
+
+A personal reading feed ranked by LLM agents. This process is the web UI + API; the
+fetch/triage/rank pipeline is a separate CLI (`python -m app.pipeline`), started by
+launchd on a schedule or by the UI's Refresh button.
+
+Config and data: FEEDAPP_DATA_DIR, else the sibling ../data of the checkout (feed.db,
+.env with ANTHROPIC_API_KEY, backups/). Logs: ~/Library/Logs/recommender-feed-server.log
+under launchd; the pipeline logs to ~/Library/Logs/recommender-feed.log. See README.md.
+"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useDraft } from "../hooks/useDraft";
 import type { Instruction } from "../types";
 import { Linkify } from "./Linkify";
 
@@ -13,7 +14,7 @@ function formatAgentNote(note: string): string {
 
 export function InstructionsPanel() {
   const [instructions, setInstructions] = useState<Instruction[]>([]);
-  const [text, setText] = useState("");
+  const [text, setText, clearText] = useDraft("instructions:new:text");
   const [kind, setKind] = useState<"quest" | "standing">("quest");
 
   const load = () => {
@@ -24,7 +25,7 @@ export function InstructionsPanel() {
   const add = async () => {
     if (!text.trim()) return;
     await api.addInstruction(text.trim(), kind);
-    setText("");
+    clearText();
     load();
   };
 
