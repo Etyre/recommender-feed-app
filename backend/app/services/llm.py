@@ -124,10 +124,10 @@ def _confirmed(model: str, system: Any, tools: list, messages: list, call: Any,
     """Make the call; if the model calls contact_eli, ask it once whether it meant to reach Eli or was remarking
     on the task (shared confirm step: Haiku otherwise uses the tool for routine remarks on JSON-only calls).
     `call(messages)` is the real call. Returns (messages, response) for _after_response; every call is counted."""
-    def counted(msgs: list, decide: Any = False) -> Any:
+    def counted(msgs: list, decide: bool = False) -> Any:
         if decide:
             r = get_client().messages.create(model=model, system=system, messages=msgs,
-                                             **llm_contact.decision_kwargs(tools, forced=decide is True))
+                                             **llm_contact.decision_kwargs(tools))
         else:
             r = call(msgs)
         if usage is not None:
