@@ -3,7 +3,8 @@ refusal handling. Every LLM stage goes through here.
 
 This is also where the agent-coding LLM standard is enforced for every call site:
 the shared preamble (shared/llm-system-prompt-preamble.md) is prepended to every
-system prompt, the `contact_eli` tool is offered on every call, and every response is
+system prompt, the `contact_eli` tool is offered on every call, a `contact_eli` call is
+followed by one question, send or keep working (llm_contact.with_confirm), and every response is
 checked with llm_contact.check(). If the model contacts Eli, LLMContacted is raised and
 the caller must stop the task it was doing (no retry, no pushing past it)."""
 from __future__ import annotations
@@ -118,6 +119,23 @@ def _after_response(model: str, system: Any, messages: list, resp: Any, tools: l
         raise LLMContacted(record)
 
 
+def _confirmed(model: str, system: Any, tools: list, messages: list, call: Any,
+               usage: "UsageTracker | None") -> tuple[list, Any]:
+    """Make the call; if the model calls contact_eli, ask it once whether it meant to reach Eli or was remarking
+    on the task (shared confirm step: Haiku otherwise uses the tool for routine remarks on JSON-only calls).
+    `call(messages)` is the real call. Returns (messages, response) for _after_response; every call is counted."""
+    def counted(msgs: list, decide: bool = False) -> Any:
+        if decide:
+            r = get_client().messages.create(model=model, system=system, messages=msgs,
+                                             **llm_contact.decision_kwargs(tools))
+        else:
+            r = call(msgs)
+        if usage is not None:
+            usage.add(model, r.usage)
+        return r
+    return llm_contact.with_confirm(APP_NAME, model, messages, counted(messages), counted)
+
+
 def _check_refusal(resp: Any) -> None:
     if resp.stop_reason == "refusal":
         detail = getattr(resp, "stop_details", None)
@@ -135,16 +153,14 @@ def parse_structured_messages(
 ) -> T:
     system = with_preamble(system)
     tools = [CONTACT_TOOL]
-    resp = get_client().messages.parse(
+    messages, resp = _confirmed(model, system, tools, messages, lambda msgs: get_client().messages.parse(
         model=model,
         max_tokens=max_tokens,
         system=system,
-        messages=messages,
+        messages=msgs,
         tools=tools,
         output_format=output_model,
-    )
-    if usage is not None:
-        usage.add(model, resp.usage)
+    ), usage)
     _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
     if resp.stop_reason == "max_tokens":
@@ -187,15 +203,13 @@ def generate_text(
     system = with_preamble(system)
     tools = [CONTACT_TOOL]
     messages = [{"role": "user", "content": user_content}]
-    resp = get_client().messages.create(
+    messages, resp = _confirmed(model, system, tools, messages, lambda msgs: get_client().messages.create(
         model=model,
         max_tokens=max_tokens,
         system=system,
-        messages=messages,
+        messages=msgs,
         tools=tools,
-    )
-    if usage is not None:
-        usage.add(model, resp.usage)
+    ), usage)
     _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
     return "".join(b.text for b in resp.content if b.type == "text")
@@ -221,15 +235,13 @@ def run_with_web_search(
     messages: list[dict] = [{"role": "user", "content": user_content}]
     resp = None
     for _ in range(max_continuations + 1):
-        resp = get_client().messages.create(
+        messages, resp = _confirmed(model, system, tools, messages, lambda msgs: get_client().messages.create(
             model=model,
             max_tokens=max_tokens,
             system=system,
-            messages=messages,
+            messages=msgs,
             tools=tools,
-        )
-        if usage is not None:
-            usage.add(model, resp.usage)
+        ), usage)
         _after_response(model, system, messages, resp, tools)
         if resp.stop_reason == "pause_turn":
             messages = messages + [{"role": "assistant", "content": resp.content}]

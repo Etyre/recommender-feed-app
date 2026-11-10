@@ -71,7 +71,11 @@ chronological feed; triage/ranking/discovery are skipped.
 **LLM standard.** Every model call goes through `backend/app/services/llm.py`, which
 prepends the shared preamble from `~/Documents/agent-coding/shared/llm-system-prompt-preamble.md`
 to every system prompt, adds the `contact_eli` tool to every call, and runs
-`llm_contact.check()` on every response. If the model contacts Eli, `LLMContacted` is
+`llm_contact.check()` on every response. A `contact_eli` tool call is first followed by one
+question (`llm_contact.with_confirm`, added 2026-11-10): did the model mean to reach Eli and stop,
+or was it remarking on the task? Haiku was sending routine remarks ("this page has no articles")
+several times a day; those now continue to a normal answer and are kept in
+`~/Library/Application Support/LLMInbox/unconfirmed.jsonl`. If the model contacts Eli, `LLMContacted` is
 raised: the pipeline skips the remaining LLM stages for that run (backup still runs) and
 records the message in the run's error field; a chat turn returns HTTP 409 and the UI
 shows the message. Nothing is retried. Read and answer with `llm-inbox`
