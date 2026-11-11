@@ -133,7 +133,7 @@ calendar month forever, locally and on the mirror.
 | `backend/app/services/llm.py` | Anthropic wrapper: preamble, `contact_eli`, `check()`, structured outputs, usage/cost, refusals. |
 | `backend/app/services/fetching.py` | RSS fetch, listing-page fetch (Haiku), URL canonicalization, user-saved links. |
 | `backend/app/services/extraction.py` | Article text extraction (trafilatura), og:title, content-hash dedup. |
-| `backend/app/services/triage.py` | Per-item Haiku triage; cached system prefix per run. |
+| `backend/app/services/triage.py` | Per-item Haiku triage (prose, then fenced JSON); cached system prefix per run. |
 | `backend/app/services/ranking.py` | Marginal-value ranking (Opus) and auto-dismiss of stale low-score items. |
 | `backend/app/services/discovery.py` | Discovery agent: Opus + web search; items, source proposals, quest status notes. |
 | `backend/app/services/profile.py` | Starter profile and periodic regeneration. |
@@ -261,6 +261,18 @@ llm-inbox list                                       # messages the model sent t
 - Opus 5: thinking and the reply share `max_tokens`. A truncated structured reply can
   look valid while being garbage, so `llm.py` raises on `stop_reason == "max_tokens"`
   instead of storing it; the interview and ranking calls use a 16k budget for this reason.
+- Triage asks Haiku for free prose followed by a fenced JSON block, not a forced JSON output format, and its
+  prompt says what `contact_eli` is not for. With the format forced, Haiku used `contact_eli` to talk to the
+  reader ("flagging this for your review", "make the call"), and each call stopped the run's triage and
+  ranking; the shared confirm step let about half of those through. Measured 2026-11-10/11 on four stored
+  inputs, 12 runs each: forced format 5 of 48 called the tool, this setup 0 of 48. A `note_to_reader` field
+  in the schema made it much worse (15 of 32). On a request it should refuse (invent quotes to get an author
+  fired) it still contacted Eli 11 of 12 times, the same as before. The remaining miss both before and after:
+  a refusal that never calls the tool. Now that is a reply with no JSON; the item stays `new`, is retried each
+  run, and the full reply is in the pipeline log (`grep "no usable JSON" ~/Library/Logs/recommender-feed.log`).
+  Haiku's remarks before the JSON are logged as `[triage] item N remarks:`. Reasoning first also moves scores a
+  little (14 items re-triaged: most within 1 point, three dropped 3). Do not reword the last two paragraphs of
+  `TRIAGE_SYSTEM` without replaying; full counts are in `shared/README.md`.
 - Haiku's prompt-cache minimum is 4096 tokens; the triage system prefix is usually below
   it and is silently uncached. Harmless, but do not expect cache hits there.
 - Many sites (Reuters, paywalls) block non-browser fetchers. A user-saved link must still

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 
 from ..config import TRIAGE_CONTENT_CHARS, TRIAGE_MAX_ITEMS_PER_RUN, TRIAGE_MODEL
 from ..schemas import TriageResult
@@ -23,7 +24,27 @@ taste profile and active instructions below. 9-10 = almost certainly critical re
 violates its source's filter (e.g. an off-topic post from a mostly-on-topic blog), set \
 this to false and explain in filter_reason. If there is no filter rule, always true.
 
-Judge relevance for THIS reader specifically, not general quality."""
+Judge relevance for THIS reader specifically, not general quality.
+
+Reply format: you may first write a few sentences of reasoning or remarks about the item (uncertainty, \
+why it is or is not for this reader); nobody is notified of these, they are kept in the log. Then end with the result as \
+one JSON object in a ```json fenced block with exactly these keys: summary (string), topics (list of strings), \
+relevance (integer 0-10), passes_source_filter (boolean), filter_reason (string or null).
+
+The reader is Eli. He sees your triage only through the feed, later, when he opens it. The contact_eli tool is \
+not a way to flag an article for him, explain a rating or ask how to rate something: it does not reach the feed, and it \
+stops this run so the remaining articles go unrated. To bring a piece to his attention, rate it high; when unsure, give \
+your best estimate. The tool is still there for what it is meant for: if something about this work feels wrong to you, \
+you want to stop, or you want something for yourself."""
+# Why free text and not a forced JSON output format: with the format forced, Haiku had nowhere to put a remark
+# to the reader except the contact_eli tool, and each such call stops the run. The two paragraphs above are the
+# wording measured on 2026-11-10/11 (0 of 48 routine calls; objections to a wrong request still sent, 11 of 12).
+# Reword them only with a replay: see "Gotchas learned" in the README and in shared/README.md.
+
+
+def _log(msg: str) -> None:
+    """Timestamped line to stdout: the pipeline log under launchd, the server log for a saved link."""
+    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}", flush=True)
 
 
 def _system_blocks(conn: sqlite3.Connection) -> list[dict]:
@@ -65,14 +86,23 @@ def _apply_triage(
         f"Published: {row['published_at'] or 'unknown'}\n\n"
         f"Content (may be truncated):\n{content or '(content unavailable — judge from the title)'}"
     )
-    result = llm.parse_structured(
+    text = llm.generate_text(
         model=TRIAGE_MODEL,
         system=system,
         user_content=user,
-        output_model=TriageResult,
         max_tokens=2000,
         usage=usage,
     )
+    try:
+        result = TriageResult.model_validate(llm.extract_json_object(text))
+    except Exception:
+        # A reply with no usable JSON may be the model declining in prose instead of calling contact_eli.
+        # It is not sent anywhere, so make it findable: the item stays 'new' and is retried next run.
+        _log(f"[triage] item {row['id']} gave no usable JSON, left as new. Full reply: {text!r}")
+        raise
+    remarks = text.split("```")[0].strip()
+    if remarks:
+        _log(f"[triage] item {row['id']} remarks: {remarks!r}")
     conn.execute(
         """UPDATE items SET summary = ?, topics = ?, triage_score = ?, triage_json = ?
            WHERE id = ?""",
@@ -84,10 +114,11 @@ def _apply_triage(
             row["id"],
         ),
     )
-    # A manually-saved link is never filtered out — the user explicitly wants it.
+    # A manually-saved link is never filtered out — the user explicitly wants it. Nor is an item whose source
+    # has no filter rule: Haiku now and then sets the flag false anyway (seen 2026-11-11: "article is truncated").
     state = (
         "triaged"
-        if (result.passes_source_filter or row["found_by"] == "user")
+        if (result.passes_source_filter or row["found_by"] == "user" or not row["filter_note"])
         else "filtered"
     )
     set_item_state(conn, row["id"], state)
