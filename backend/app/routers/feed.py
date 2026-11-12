@@ -86,18 +86,30 @@ def get_feed(conn: sqlite3.Connection = Depends(get_db)):
             )
             for r in rows
         ]
-        # User-saved links that haven't been through a ranking run yet go on top —
-        # they'd otherwise be invisible until the next pipeline run.
-        pending_user = conn.execute(
-            """SELECT i.*, s.name AS source_name
+        # User-saved links the latest ranking did not include. Ranking only sees the top
+        # RANKING_MAX_CANDIDATES by triage score, so a saved link can stay unranked for good;
+        # putting all of those first buried the ranked feed under 90 old saves (2026-11-12).
+        # Only a link saved since that run started goes on top (it has had no chance to be
+        # ranked yet); the rest follow the ranked list, best triage score first.
+        unranked_user = conn.execute(
+            """SELECT i.*, s.name AS source_name,
+                      i.discovered_at >= (SELECT started_at FROM pipeline_runs WHERE id = ?)
+                        AS is_pending
                FROM items i LEFT JOIN sources s ON s.id = i.source_id
                WHERE i.found_by = 'user' AND i.state IN ('new', 'triaged')
                  AND i.id NOT IN
                    (SELECT item_id FROM feed_rankings WHERE pipeline_run_id = ?)
-               ORDER BY i.discovered_at DESC""",
-            (run_id,),
+               ORDER BY COALESCE(i.triage_score, 5) DESC, i.discovered_at DESC""",
+            (run_id, run_id),
         ).fetchall()
-        items = [_item_dict(conn, r) for r in pending_user] + items
+        pending = sorted(
+            (r for r in unranked_user if r["is_pending"]),
+            key=lambda r: r["discovered_at"], reverse=True,
+        )
+        rest = [r for r in unranked_user if not r["is_pending"]]
+        items = (
+            [_item_dict(conn, r) for r in pending] + items + [_item_dict(conn, r) for r in rest]
+        )
         run = conn.execute(
             "SELECT id, status, started_at, finished_at FROM pipeline_runs WHERE id = ?",
             (run_id,),

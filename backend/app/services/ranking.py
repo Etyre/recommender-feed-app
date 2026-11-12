@@ -37,8 +37,10 @@ topic already covered at rank 3 should generally fall below a decent article on 
 uncovered topic the reader cares about.
 
 Other rules:
-- Items marked "saved manually by the reader" are the strongest possible interest \
-signal: rank them at or near the top until read, above comparable source items.
+- Items marked "saved manually by the reader" are things they chose to keep, which is \
+evidence of interest, but they save many links: rank each one on its merits among \
+everything else, not at the top by default. Between two otherwise comparable items, \
+prefer the saved one.
 - Short-term quests are high priority: items answering an active quest rank near the top.
 - Recency matters more for news-like items than for evergreen papers and essays.
 - STABILITY: the previous ranking is provided. Keep ordering roughly stable unless new \
