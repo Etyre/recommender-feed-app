@@ -34,6 +34,10 @@ over-propose; most turns propose nothing.
 - The reader sees your reply directly. proposed_instructions render as one-click \
 "add" chips, so don't also spell them out redundantly in the reply.
 
+Known problem in this history, which Eli already knows about: a few of your replies from \
+July and August 2026 were stored with garbled text (doubled or missing words), and the \
+reader saw them that way. The cause was never found. You don't need to report it.
+
 Output: reply (your next conversational turn) + proposed_instructions (usually empty)."""
 
 
@@ -60,10 +64,18 @@ def _history(conn: sqlite3.Connection, limit: int = 40) -> list:
         "SELECT role, content FROM conversation_messages ORDER BY id DESC LIMIT ?",
         (limit,),
     ).fetchall()
-    return [
-        {"role": "assistant" if r["role"] == "agent" else "user", "content": r["content"]}
-        for r in reversed(rows)
-    ]
+    # The stored history has junk from old bugs: user messages saved twice in a row and
+    # one agent reply that is only ",". The rows are kept (they are the record) but are
+    # not sent: on 2026-11-12 Opus stopped three turns running to report them to Eli.
+    out: list = []
+    for r in reversed(rows):
+        role = "assistant" if r["role"] == "agent" else "user"
+        if role == "assistant" and not re.search(r"\w", r["content"]):
+            continue
+        if role == "user" and out and out[-1] == {"role": "user", "content": r["content"]}:
+            continue
+        out.append({"role": role, "content": r["content"]})
+    return out
 
 
 def _message_dict(row: sqlite3.Row) -> dict:

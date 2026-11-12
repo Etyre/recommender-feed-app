@@ -38,10 +38,16 @@ def accept_proposal(
         expires = (
             f"datetime('now', '+{QUEST_DEFAULT_DAYS} days')" if kind == "quest" else "NULL"
         )
-        conn.execute(
-            f"INSERT INTO instructions (text, kind, expires_at) VALUES (?, ?, {expires})",
-            (proposal["text"], kind),
-        )
+        # The same text may already be active (a chip clicked twice before `added` was
+        # persisted left four copies of two preferences in July); don't add another.
+        exists = conn.execute(
+            "SELECT 1 FROM instructions WHERE status = 'active' AND text = ?", (proposal["text"],)
+        ).fetchone()
+        if not exists:
+            conn.execute(
+                f"INSERT INTO instructions (text, kind, expires_at) VALUES (?, ?, {expires})",
+                (proposal["text"], kind),
+            )
         proposal["added"] = True
         conn.execute(
             "UPDATE conversation_messages SET proposals_json = ? WHERE id = ?",

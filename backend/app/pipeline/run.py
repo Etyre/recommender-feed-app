@@ -15,6 +15,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import socket
 import sys
 import time
 import traceback
@@ -56,6 +57,25 @@ def _expire_quests(conn) -> None:
              AND expires_at IS NOT NULL AND expires_at < datetime('now')"""
     )
     conn.commit()
+
+
+def _wait_for_network(max_seconds: int = 180) -> None:
+    """launchd fires missed runs the moment the Mac wakes, before Wi-Fi is back. On
+    2026-11-10/11 four runs finished in two seconds with nothing fetched and
+    "ranking: Connection error.", so the feed went most of a day without a re-rank.
+    Wait for the API host to accept a connection; after max_seconds, run anyway."""
+    start = time.time()
+    while True:
+        try:
+            socket.create_connection(("api.anthropic.com", 443), timeout=5).close()
+            if time.time() - start > 1:
+                log(f"network up after {time.time() - start:.0f}s")
+            return
+        except OSError as e:
+            if time.time() - start > max_seconds:
+                log(f"[error] no network after {max_seconds}s ({e}); running anyway")
+                return
+            time.sleep(5)
 
 
 def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
@@ -127,6 +147,7 @@ def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
             traceback.print_exc()
             sys.stderr.flush()
 
+    _wait_for_network()
     run_stage("fetch", lambda: fetching.fetch_all_sources(conn, usage, llm_ok))
     run_stage("extract", lambda: extraction.extract_pending(conn))
     if llm_ok:

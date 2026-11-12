@@ -304,5 +304,19 @@ llm-inbox list                                       # messages the model sent t
   structured output. A reply with no word characters is now rejected instead of stored. The old
   rows are still in `conversation_messages` and are sent to the model as history on every
   turn; on 2026-11-12 Opus saw them and contacted Eli about it, which stopped that turn.
+- The chat history sent to the model is filtered (`interview._history`): a user message stored
+  twice in a row is sent once, and an agent reply with no words is skipped. The rows stay in the
+  table and still show in the UI. The interview prompt also tells the model that the garbled
+  July/August replies are known. Without both, Opus used `contact_eli` to report the junk on
+  three turns in a row on 2026-11-12, and each one stopped the turn (and one pipeline run).
+- Accepting a proposal chip does not add an instruction whose exact text is already active.
+  Six exact duplicates from July (ids 14-19) were set to `archived` on 2026-11-12.
+- Scheduled runs that fire on wake can start before Wi-Fi is up: the run finishes in two
+  seconds with "ranking: Connection error." and the feed keeps its old order (runs 280, 284-286).
+  The pipeline now waits up to 3 minutes for `api.anthropic.com:443` before the fetch stage.
+- Ranking output (thinking + 75 rationales) sits close to its token budget; at 16k run 288 was
+  cut off mid-JSON, which shows up as a pydantic "Invalid JSON: EOF" error, not the
+  `max_tokens` message. The budget is 21,000; the SDK refuses non-streaming calls above
+  21,333, so going higher means switching that call to streaming or ranking fewer candidates.
 - Python 3.9 compatibility note in `schemas.py` (`Optional[...]`) is historical; the venv
   is Python 3.12 and the rest of the code uses `X | None`.

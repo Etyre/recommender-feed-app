@@ -126,7 +126,9 @@ def rank_items(
         system=RANKING_SYSTEM,
         user_content=user,
         output_model=RankingResult,
-        max_tokens=16000,
+        # Thinking plus 75 entries with rationales runs close to 16k; run 288 (2026-11-12)
+        # was cut off mid-JSON there. 21,333 is the most the SDK allows without streaming.
+        max_tokens=21000,
         usage=usage,
     )
     seen: set[int] = set()
