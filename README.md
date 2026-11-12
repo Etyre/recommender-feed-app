@@ -292,5 +292,17 @@ llm-inbox list                                       # messages the model sent t
 - `messages.parse()` responses carry Pydantic generics that make `model_dump()` print a
   wall of serialization warnings; `llm.py` dumps them with `warnings=False` before handing
   them to `llm_contact.check()`.
+- Chat: the user's message is stored before the model is called, so a failed or stopped reply
+  (409 when the model contacts Eli, 502 for a truncated or wordless reply) leaves it saved with
+  no answer. The page used to put the text back in the box as well, and the next Send stored it
+  twice (rows 29/30 in August). Now it reloads the conversation, restores the draft only if the
+  message did not arrive, and shows "Ask for a reply", which posts `message: null` to answer
+  the stored message.
+- Chat replies stored between 2026-07-27 and 2026-08-05 contain garbled text ("HereHere'the
+  heuristic", "would would", and one reply that is only ","). The raw API responses were not
+  kept, so the cause is unknown; the stored text is what came back in the `reply` field of the
+  structured output. A reply with no word characters is now rejected instead of stored. The old
+  rows are still in `conversation_messages` and are sent to the model as history on every
+  turn; on 2026-11-12 Opus saw them and contacted Eli about it, which stopped that turn.
 - Python 3.9 compatibility note in `schemas.py` (`Optional[...]`) is historical; the venv
   is Python 3.12 and the rest of the code uses `X | None`.

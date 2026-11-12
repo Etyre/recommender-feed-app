@@ -4,6 +4,7 @@ on answers, and proposes instructions the reader can accept with one click."""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 
 from ..config import SMART_MODEL
@@ -112,6 +113,11 @@ def converse(
         max_tokens=16000,
         usage=usage,
     )
+    if not re.search(r"\w", turn.reply):
+        # On 2026-08-05 a reply came back as a single "," and was stored and shown; it then
+        # sat in the history every later turn read. Fail the turn instead (the user's
+        # message is already saved, so the UI offers "Ask for a reply").
+        raise ValueError(f"the agent's reply had no words in it ({turn.reply!r}); not stored")
     valid = [p for p in turn.proposed_instructions if p.kind in ("quest", "standing")]
     cur = conn.execute(
         "INSERT INTO conversation_messages (role, content, proposals_json) VALUES ('agent', ?, ?)",

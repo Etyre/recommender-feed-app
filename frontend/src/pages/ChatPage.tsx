@@ -37,8 +37,20 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
       onSeen();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      // Failed send: put the draft back so nothing typed is lost.
-      if (text) setInput(text);
+      // The server stores the message before it calls the model, so a failed reply usually
+      // means the message is already saved. Putting it back in the box as well made the
+      // next Send store it twice. Ask the server what it has; restore the draft only if
+      // the message did not arrive.
+      let stored = false;
+      try {
+        const all = await api.conversation();
+        setMessages(all);
+        const last = all[all.length - 1];
+        stored = !!text && !!last && last.role === "user" && last.content === text;
+      } catch {
+        setMessages((m) => m.filter((x) => x.id !== -1));
+      }
+      if (text && !stored) setInput(text);
     } finally {
       setBusy(false);
     }
@@ -86,6 +98,14 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
         <div ref={bottom} />
       </div>
       {error && <p className="error">{error}</p>}
+      {!busy && messages.length > 0 && messages[messages.length - 1].role === "user" && (
+        // A stored message with no reply (the model call failed or was stopped): ask
+        // again without resending the text.
+        <p className="hint">
+          Your last message is saved but has no reply.{" "}
+          <button onClick={() => send(null)}>Ask for a reply</button>
+        </p>
+      )}
       <div className="chat-input">
         <textarea
           rows={2}

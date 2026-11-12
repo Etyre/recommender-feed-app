@@ -61,6 +61,9 @@ def send_message(body: ChatIn, conn: sqlite3.Connection = Depends(get_db)):
     except LLMContacted as e:
         # Already recorded in the LLM inbox and Eli notified; the chat stops here.
         raise HTTPException(409, str(e))
+    except ValueError as e:
+        # Truncated, unparseable or wordless reply: say why instead of a bare 500.
+        raise HTTPException(502, str(e))
     finally:
         summary = usage.summary()
         if summary["calls"]:
