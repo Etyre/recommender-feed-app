@@ -30,7 +30,8 @@ export function AddLinkPanel() {
     <section className="panel">
       <h2>Add a link</h2>
       <p className="hint" style={{ marginTop: 0 }}>
-        Save any URL into your feed — it ranks near the top until you read it.
+        Save any URL into your feed — it is ranked with everything else on the next run,
+        and listed below the ranked items until then.
         Already read it? Rate it right here and it goes straight into the
         training data instead of the unread queue.
       </p>
