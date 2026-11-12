@@ -62,8 +62,8 @@ if it exists, else `./data` inside the checkout (gitignored). `make where` print
 - **Chat** — a two-way interview with the curator agent (asks one targeted question at a
   time; clear preferences become one-click instruction chips). The pipeline also leaves
   a question proactively when ≥5 ratings have arrived since the agent last spoke.
-- **Add a link** — any URL saved on the Feed page is triaged immediately and shown first
-  until the next ranking run, which then ranks it on its merits among everything else; you can rate it inline if you already read it.
+- **Add a link** — any URL saved on the Feed page is triaged immediately and listed just
+  below the ranked items until a ranking run includes it, on its merits among everything else; you can rate it inline if you already read it.
 
 **Without an API key** the app still runs: it fetches RSS sources and shows a
 chronological feed; triage/ranking/discovery are skipped.
@@ -320,8 +320,8 @@ llm-inbox list                                       # messages the model sent t
   21,333, so going higher means switching that call to streaming or ranking fewer candidates.
 - Ranking only sees the 75 candidates with the highest triage score, so most saved links are
   never ranked. The feed used to put every unranked saved link first; by 2026-11-12 that was 90
-  links above the ranked list. Now only links saved since the latest ranking run started go
-  first, and the other unranked saves follow the ranked list by triage score. The ranking prompt
+  links above the ranked list. Now no saved link goes above the ranked list: unranked saves
+  follow it, newest-since-the-last-run first, then by triage score. The ranking prompt
   no longer tells Opus to put saved links at or near the top.
 - Python 3.9 compatibility note in `schemas.py` (`Optional[...]`) is historical; the venv
   is Python 3.12 and the rest of the code uses `X | None`.
