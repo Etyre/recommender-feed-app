@@ -5,6 +5,8 @@
 #                           runs 7:30 / 12:30 / 17:30 / 21:30)
 #   ./install.sh --server   also build the frontend and install the always-on web server
 #                           (com.elityre.recommender-feed.server at http://localhost:8000)
+#   ./install.sh --app      --server, plus build the desktop app into
+#                           ~/Applications/Reading Feed.app (desktop/build.sh)
 #
 # Both targets substitute the checkout, data and log paths into launchd/*.plist, copy the
 # result to ~/Library/LaunchAgents, boot out any previously loaded copy (including the old
@@ -13,7 +15,10 @@ set -eu
 cd "$(dirname "$0")"
 [ -d backend/.venv ] || make setup
 make schedule
-if [ "${1:-}" = "--server" ]; then
+if [ "${1:-}" = "--server" ] || [ "${1:-}" = "--app" ]; then
   make install
+fi
+if [ "${1:-}" = "--app" ]; then
+  ./desktop/build.sh
 fi
 make status

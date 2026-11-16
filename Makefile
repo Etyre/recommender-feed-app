@@ -15,7 +15,7 @@ AGENTS := $(HOME)/Library/LaunchAgents
 UID_ := $(shell id -u)
 
 .PHONY: setup dev-backend dev-frontend build run pipeline backup seed where test logs \
-        install uninstall restart schedule unschedule status
+        install uninstall restart schedule unschedule status app app-test
 
 setup: $(VENV) frontend/node_modules
 	@mkdir -p $(DATA)
@@ -83,6 +83,14 @@ endef
 install: build
 	$(call install_plist,$(SERVER_LABEL),$(OLD_SERVER_LABEL))
 	@echo "Installed. The app is always at http://localhost:8000 (log: $(LOGS)/recommender-feed-server.log)."
+
+# Desktop app: a window onto the server above, in ~/Applications/Reading Feed.app.
+app:
+	./desktop/build.sh
+
+# Loads the UI in the installed app without showing a window; prints PASS or FAIL.
+app-test:
+	"$(HOME)/Applications/Reading Feed.app/Contents/MacOS/ReadingFeed" --test
 
 uninstall:
 	-launchctl bootout gui/$(UID_)/$(SERVER_LABEL)

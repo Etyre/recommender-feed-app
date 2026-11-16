@@ -44,6 +44,15 @@ if it exists, else `./data` inside the checkout (gitignored). `make where` print
   available. A `pipeline.lock` (flock) stops two runs overlapping; runs that die are
   marked `stale: interrupted` after 60 minutes.
 
+**Desktop app** (added 2026-11-16). `~/Applications/Reading Feed.app` is a small Swift shell
+(`desktop/main.swift`): one window with a WKWebView pointed at the API server on
+`http://127.0.0.1:8000`. It holds no app logic and does not start the server; the launchd
+server agent does that, so the app needs `./install.sh --app` (or `--server`) to have been run.
+While the server is down the window shows a waiting page and retries every second. Links to
+anything other than the feed UI (articles, sources) open in the default browser. Closing the
+window leaves the app running; the dock icon brings it back. Frontend and backend changes need
+only `make restart` and Cmd-R in the app; the app is rebuilt only when `desktop/` changes.
+
 **How it learns.**
 
 - **Ratings** — 4 tiers: critical / worth it / fine / not worth it, plus "Didn't finish"
@@ -110,12 +119,14 @@ calendar month forever, locally and on the mirror.
 | File | Purpose |
 |---|---|
 | `Makefile` | Every task: setup, dev servers, build, pipeline, backup, launchd install/schedule/status, test, logs. |
-| `install.sh` | Idempotent: installs the pipeline launchd agent (`--server` also installs the always-on server). Wraps `make schedule` / `make install`. |
+| `install.sh` | Idempotent: installs the pipeline launchd agent (`--server` also installs the always-on server; `--app` also builds the desktop app). Wraps `make schedule` / `make install` / `desktop/build.sh`. |
 | `build.sh` | Idempotent frontend build into `frontend/dist` (installs node modules only if missing). |
 | `test.sh` | End-to-end dry run against a throwaway data dir, no API key, no iCloud; also checks the LLM-standard plumbing offline. |
 | `.env.example` | Template for `<data dir>/.env` (`ANTHROPIC_API_KEY`, optional overrides). |
 | `launchd/com.elityre.recommender-feed.pipeline.plist` | Template: pipeline at 7:30 / 12:30 / 17:30 / 21:30. `__REPO__`, `__DATA__`, `__LOGS__` are substituted by `make`. |
 | `launchd/com.elityre.recommender-feed.server.plist` | Template: always-on API server on port 8000, `RunAtLoad` + `KeepAlive`. |
+| `desktop/main.swift` | The desktop app: window, web view, menus, external links, JS dialogs, zoom, waiting page, `--test`. |
+| `desktop/build.sh` | Idempotent: compiles the app, makes its icon from `frontend/public/icon-512.png`, ad-hoc signs it, installs to `~/Applications`. |
 | `backend/requirements.txt` | fastapi, uvicorn, anthropic, feedparser, trafilatura, httpx, pydantic. |
 | `backend/app/main.py` | FastAPI app: routers, CORS for the Vite dev server, no-cache for `index.html`, static frontend. |
 | `backend/app/config.py` | Data-dir resolution, `.env` loading, model names (`claude-haiku-4-5`, `claude-opus-5`), every cap and threshold. |
@@ -165,6 +176,10 @@ calendar month forever, locally and on the mirror.
 - **Backup mirror:** `~/Library/Mobile Documents/com~apple~CloudDocs/FeedAppBackups/`
   (or `FEEDAPP_BACKUP_MIRROR`).
 - **LLM inbox:** `~/Library/Application Support/LLMInbox/messages.jsonl` (shared across projects).
+- **Desktop app:** `~/Applications/Reading Feed.app` (bundle id `com.elityre.recommender-feed`).
+  Its log is `~/Library/Logs/recommender-feed-app.log`; window frame and zoom are in its
+  UserDefaults; its web storage, which holds the text-field drafts, is in
+  `~/Library/WebKit/com.elityre.recommender-feed/`.
 - **Web UI:** http://localhost:8000 (built) or http://localhost:5173 (Vite dev server).
 
 ## Common tasks
@@ -209,9 +224,17 @@ make status              # show server + pipeline launchd state
 make unschedule / make uninstall
 ```
 
-The app is then permanently at http://localhost:8000. To get a dock icon / standalone
-window, open that URL in Chrome and choose **⋮ → Cast, save, and share → Install page as
-app** (the site ships a PWA manifest).
+The app is then permanently at http://localhost:8000.
+
+Desktop app (its own window and dock icon; needs the always-on server):
+
+```bash
+./install.sh --app       # pipeline + server + build ~/Applications/Reading Feed.app
+make app                 # rebuild the app only, after changing desktop/; then quit and reopen it
+open ~/Applications/"Reading Feed.app"
+make app-test            # load the UI in the app with no window; prints PASS or FAIL
+tail -f ~/Library/Logs/recommender-feed-app.log
+```
 
 Test without the real trigger (throwaway data dir, no API key, no iCloud; fetches real
 RSS, runs extract + backup, checks the run row and the LLM-standard plumbing):
@@ -250,6 +273,15 @@ llm-inbox list                                       # messages the model sent t
   `~/Library/Application Support/LLMInbox/config.env`, see `shared/README.md`.
 
 ## Gotchas learned
+
+- The desktop app and a browser tab are different origins' worth of storage: drafts typed in
+  Chrome (`localhost:8000` or `:5173`) do not appear in the app, and the reverse. Everything
+  saved to the server is shared.
+- A bare WKWebView has no Edit menu, so Cmd-C/V/Z do nothing in text fields; it drops
+  `alert()`/`confirm()` silently; it ignores `target="_blank"` links; and it leaves spell
+  check off. `desktop/main.swift` handles each of these, so keep those pieces if it is rewritten.
+- `make app-test` passing means the page rendered inside the app's web view against the live
+  server. It does not click anything.
 
 - `launchd/*.plist` are templates; `make` substitutes `__REPO__`, `__DATA__` and
   `__LOGS__`. Editing the copy in `~/Library/LaunchAgents` directly is lost on the next
