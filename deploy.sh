@@ -23,7 +23,9 @@ SERVER=gui/$(id -u)/com.elityre.recommender-feed.server
 say() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
 
 if [ "${1:-}" = "--all" ]; then
-  changed="frontend/ backend/ desktop/"
+  changed="frontend/
+backend/
+desktop/"   # one path per line, like git's output: the checks below match at line start
 elif [ $# -ge 2 ]; then
   changed=$(git diff --name-only "$1" "$2")
 else
