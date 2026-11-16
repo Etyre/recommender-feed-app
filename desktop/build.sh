@@ -2,10 +2,13 @@
 # Build "Reading Feed.app" (the desktop window for the feed, desktop/main.swift) into
 # desktop/build and install it to ~/Applications. Idempotent; safe to rerun.
 # The app only shows what the local server serves: ./install.sh --app also installs that.
-# A running copy keeps the old code until it is quit and reopened.
+# A running copy keeps the old code until it is quit and reopened; deploy.sh (run by the
+# git hooks after every commit that touches desktop/) does both.
 set -euo pipefail
 cd "$(dirname "$0")"
 NAME="Reading Feed"
+# The build number is the commit count, so About Reading Feed shows which commit is installed.
+BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 APP="build/$NAME.app"
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" build/icon.iconset
 
@@ -26,7 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>$NAME</string>
   <key>CFBundleDisplayName</key><string>$NAME</string>
   <key>CFBundleIdentifier</key><string>com.elityre.recommender-feed</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleExecutable</key><string>ReadingFeed</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>

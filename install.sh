@@ -14,6 +14,8 @@
 set -eu
 cd "$(dirname "$0")"
 [ -d backend/.venv ] || make setup
+# Every commit and pull then updates the running server and app by itself (deploy.sh).
+git config core.hooksPath hooks
 make schedule
 if [ "${1:-}" = "--server" ] || [ "${1:-}" = "--app" ]; then
   make install

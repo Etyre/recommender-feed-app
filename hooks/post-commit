@@ -1,0 +1,4 @@
+#!/bin/sh
+# After every commit, update the running server and ~/Applications/Reading Feed.app in the
+# background (see deploy.sh). Enabled by install.sh, which sets core.hooksPath to hooks/.
+"$(git rev-parse --show-toplevel)/deploy.sh" </dev/null >/dev/null 2>&1 &

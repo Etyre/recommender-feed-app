@@ -51,7 +51,16 @@ server agent does that, so the app needs `./install.sh --app` (or `--server`) to
 While the server is down the window shows a waiting page and retries every second. Links to
 anything other than the feed UI (articles, sources) open in the default browser. Closing the
 window leaves the app running; the dock icon brings it back. Frontend and backend changes need
-only `make restart` and Cmd-R in the app; the app is rebuilt only when `desktop/` changes.
+only a rebuilt frontend and a restarted server; the app is rebuilt only when `desktop/` changes.
+
+**Automatic updates** (added 2026-11-16). `install.sh` sets `core.hooksPath` to `hooks/`, whose
+`post-commit` and `post-merge` run `deploy.sh` in the background. It looks at which paths the
+commit (or pull) touched: `frontend/` or `backend/` rebuilds the frontend and bounces the
+server (`make restart`); `desktop/` or the icon rebuilds `~/Applications/Reading Feed.app` and,
+if the app was open, quits it and reopens it in the background. The app compares the served
+`index.html` with the one it loaded each time it becomes the active app, and reloads when a
+newer frontend build is there. The app's build number (About Reading Feed) is the commit count
+it was built from. Nothing is deployed without a commit or pull.
 
 **How it learns.**
 
@@ -127,6 +136,8 @@ calendar month forever, locally and on the mirror.
 | `launchd/com.elityre.recommender-feed.server.plist` | Template: always-on API server on port 8000, `RunAtLoad` + `KeepAlive`. |
 | `desktop/main.swift` | The desktop app: window, web view, menus, external links, JS dialogs, zoom, waiting page, `--test`. |
 | `desktop/build.sh` | Idempotent: compiles the app, makes its icon from `frontend/public/icon-512.png`, ad-hoc signs it, installs to `~/Applications`. |
+| `deploy.sh` | Updates the running server and the installed app for whatever the last commit (or a given range, or `--all`) changed. |
+| `hooks/post-commit`, `hooks/post-merge` | Run `deploy.sh` in the background after every commit and pull. Active once `install.sh` has set `core.hooksPath`. |
 | `backend/requirements.txt` | fastapi, uvicorn, anthropic, feedparser, trafilatura, httpx, pydantic. |
 | `backend/app/main.py` | FastAPI app: routers, CORS for the Vite dev server, no-cache for `index.html`, static frontend. |
 | `backend/app/config.py` | Data-dir resolution, `.env` loading, model names (`claude-haiku-4-5`, `claude-opus-5`), every cap and threshold. |
@@ -180,6 +191,7 @@ calendar month forever, locally and on the mirror.
   Its log is `~/Library/Logs/recommender-feed-app.log`; window frame and zoom are in its
   UserDefaults; its web storage, which holds the text-field drafts, is in
   `~/Library/WebKit/com.elityre.recommender-feed/`.
+- **Deploy log:** `~/Library/Logs/recommender-feed-deploy.log` (what each commit rebuilt or restarted, and build failures).
 - **Web UI:** http://localhost:8000 (built) or http://localhost:5173 (Vite dev server).
 
 ## Common tasks
@@ -230,7 +242,9 @@ Desktop app (its own window and dock icon; needs the always-on server):
 
 ```bash
 ./install.sh --app       # pipeline + server + build ~/Applications/Reading Feed.app
-make app                 # rebuild the app only, after changing desktop/; then quit and reopen it
+make app                 # rebuild the app by hand (a commit touching desktop/ does this itself)
+./deploy.sh --all        # rebuild and restart server and app now, whatever changed
+tail ~/Library/Logs/recommender-feed-deploy.log   # what the last commits deployed
 open ~/Applications/"Reading Feed.app"
 make app-test            # load the UI in the app with no window; prints PASS or FAIL
 tail -f ~/Library/Logs/recommender-feed-app.log
@@ -273,6 +287,15 @@ llm-inbox list                                       # messages the model sent t
   `~/Library/Application Support/LLMInbox/config.env`, see `shared/README.md`.
 
 ## Gotchas learned
+
+- Auto-deploy builds from the working tree, not from a clean checkout of the commit: any
+  uncommitted edits sitting in `frontend/`, `backend/` or `desktop/` at commit time go live too.
+- The hooks only run if `git config core.hooksPath` says `hooks` (set by `install.sh`; a fresh
+  clone does not have it). A failed build is only reported in the deploy log; the old build
+  keeps running.
+- A pipeline run started from the UI's Refresh button is a child of the server and dies when
+  the server restarts. `deploy.sh` therefore waits (up to 20 minutes) for such a run before
+  restarting; a hand-run `make restart` does not.
 
 - The desktop app and a browser tab are different origins' worth of storage: drafts typed in
   Chrome (`localhost:8000` or `:5173`) do not appear in the app, and the reverse. Everything

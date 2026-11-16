@@ -1,0 +1,3 @@
+#!/bin/sh
+# After a pull or merge, deploy everything that came in (see deploy.sh).
+"$(git rev-parse --show-toplevel)/deploy.sh" ORIG_HEAD HEAD </dev/null >/dev/null 2>&1 &

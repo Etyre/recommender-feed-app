@@ -59,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var webView: WKWebView!
     var showingWaitingPage = false
     var connectStarted = Date()
+    /// index.html as it was when the UI was last loaded; it names the hashed JS/CSS bundles,
+    /// so it differs exactly when a newer frontend build is being served.
+    var loadedShell: Data?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // WebKit keeps spell check off until the user turns it on from the context menu;
@@ -108,10 +111,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         var request = URLRequest(url: appURL)
         request.timeoutInterval = 2
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        URLSession.shared.dataTask(with: request) { _, response, error in
+        URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
                 if let http = response as? HTTPURLResponse, http.statusCode == 200 {
                     self.showingWaitingPage = false
+                    self.loadedShell = data
                     self.webView.load(URLRequest(url: appURL))
                     return
                 }
@@ -124,6 +128,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                     self.finishTest(false, "server never answered at \(appURL.absoluteString)")
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.connect() }
+            }
+        }.resume()
+    }
+
+    // A commit rebuilds the frontend behind the app's back (deploy.sh). Pick the new build up
+    // when the reader comes back to the app, rather than reloading under them mid-read.
+    // Drafts are in localStorage, so a reload loses no typing.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard !showingWaitingPage, let loaded = loadedShell else { return }
+        var request = URLRequest(url: appURL)
+        request.timeoutInterval = 2
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            DispatchQueue.main.async {
+                guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                      let data = data, data != loaded, self.loadedShell == loaded else { return }
+                log("newer frontend build is being served; reloading")
+                self.connect()
             }
         }.resume()
     }
