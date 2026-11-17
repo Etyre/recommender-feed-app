@@ -116,7 +116,7 @@ def converse(
                 or "Interview me: ask the one question whose answer would most improve my feed right now.",
             }
         )
-    # Generous budget: on Opus 5, thinking and the reply share max_tokens.
+    # Generous budget: on Opus 5 and 5.5, thinking and the reply share max_tokens.
     turn = llm.parse_structured_messages(
         model=SMART_MODEL,
         system=_system_blocks(conn),

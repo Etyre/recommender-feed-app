@@ -2,7 +2,7 @@
 
 A personal reading feed, ranked by LLM agents. Fetches from your sources (RSS or plain
 listing pages), triages and summarizes every new item with a cheap model (Haiku), then
-ranks the unread queue by **marginal value** with a stronger model (Opus 5) — an item's
+ranks the unread queue by **marginal value** with a stronger model (Opus 5.5) — an item's
 position accounts for what's ranked above it, so redundant coverage gets discounted.
 Your ratings ("critical" → "not worth reading") and notes feed a taste profile the
 system regenerates over time. A discovery agent with web search chases your short-term
@@ -140,7 +140,7 @@ calendar month forever, locally and on the mirror.
 | `hooks/post-commit`, `hooks/post-merge` | Run `deploy.sh` in the background after every commit and pull. Active once `install.sh` has set `core.hooksPath`. |
 | `backend/requirements.txt` | fastapi, uvicorn, anthropic, feedparser, trafilatura, httpx, pydantic. |
 | `backend/app/main.py` | FastAPI app: routers, CORS for the Vite dev server, no-cache for `index.html`, static frontend. |
-| `backend/app/config.py` | Data-dir resolution, `.env` loading, model names (`claude-haiku-4-5`, `claude-opus-5`), every cap and threshold. |
+| `backend/app/config.py` | Data-dir resolution, `.env` loading, model names (`claude-haiku-5-5`, `claude-opus-5-5`), every cap and threshold. |
 | `backend/app/db.py` | SQLite connection (WAL, busy timeout, foreign keys) and migrations runner (`PRAGMA user_version`). |
 | `backend/app/migrations/*.sql` | Schema: items, sources, ratings, rankings, instructions, proposals, conversation, reading notes. |
 | `backend/app/schemas.py` | Pydantic models for structured LLM outputs and API bodies. |
@@ -328,8 +328,18 @@ llm-inbox list                                       # messages the model sent t
   Haiku's remarks before the JSON are logged as `[triage] item N remarks:`. Reasoning first also moves scores a
   little (14 items re-triaged: most within 1 point, three dropped 3). Do not reword the last two paragraphs of
   `TRIAGE_SYSTEM` without replaying; full counts are in `shared/README.md`.
-- Haiku's prompt-cache minimum is 4096 tokens; the triage system prefix is usually below
-  it and is silently uncached. Harmless, but do not expect cache hits there.
+- Models moved on 2026-11-16: Haiku 4.5 to Haiku 5.5 (triage, listing pages) and Opus 5 to Opus 5.5 (everything
+  else). Three things changed with them. Opus 5.5 defaults to medium effort where Opus 5 ran at high, so
+  `llm.py` sends `effort: high` for it (`EFFORT`). Haiku 5.5 thinks by default and thinking shares
+  `max_tokens`, so triage went from 2000 to 6000 and listing from 4000 to 8000. And the shared confirm step
+  only runs for Haiku 4.5 (`llm_contact.CONFIRM_MODELS`), so on Haiku 5.5 a `contact_eli` call is sent
+  straight away and stops the run. Replayed before switching, on a copy of `feed.db`: 10 triage items and 2
+  listing pages, no `contact_eli` calls, every reply parsed, scores within 2 points of Haiku 4.5's. The
+  objection half (does it still contact Eli about a request it should refuse) was not rerun on Haiku 5.5. The
+  Haiku 4.5 measurements in this section describe the old model; if routine `contact_eli` calls start
+  stopping runs, replay again before rewording.
+- Haiku 5.5 caches prompts from about 512 tokens up (Haiku 4.5 needed 4096), so the triage system prefix is
+  now cached across a run.
 - Many sites (Reuters, paywalls) block non-browser fetchers. A user-saved link must still
   succeed, so it falls back to a slug-derived title and empty content (`''`, so the
   pipeline does not refetch it forever).

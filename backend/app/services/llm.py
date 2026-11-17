@@ -28,9 +28,19 @@ CONTACT_TOOL = llm_contact.CONTACT_TOOL
 
 # USD per million tokens (input, output)
 PRICES = {
+    "claude-haiku-5-5": (0.10, 0.50),  # prompts up to 100K tokens; every call here is far below that
+    "claude-opus-5-5": (4.0, 20.0),
     "claude-haiku-4-5": (1.0, 5.0),
     "claude-opus-5": (5.0, 25.0),
 }
+
+# Opus 5.5 defaults to medium effort; Opus 5, which these prompts were tuned on, ran at high. Keep high.
+# Haiku 5.5 is left at its default (medium).
+EFFORT = {"claude-opus-5-5": "high"}
+
+
+def _effort(model: str) -> dict:
+    return {"output_config": {"effort": EFFORT[model]}} if model in EFFORT else {}
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -122,7 +132,7 @@ def _after_response(model: str, system: Any, messages: list, resp: Any, tools: l
 def _confirmed(model: str, system: Any, tools: list, messages: list, call: Any,
                usage: "UsageTracker | None") -> tuple[list, Any]:
     """Make the call; if the model calls contact_eli, ask it once whether it meant to reach Eli or was remarking
-    on the task (shared confirm step: Haiku otherwise uses the tool for routine remarks on JSON-only calls).
+    on the task (shared confirm step, active only for the models in llm_contact.CONFIRM_MODELS: Haiku 4.5 otherwise uses the tool for routine remarks on JSON-only calls).
     `call(messages)` is the real call. Returns (messages, response) for _after_response; every call is counted."""
     def counted(msgs: list, decide: bool = False) -> Any:
         if decide:
@@ -160,6 +170,7 @@ def parse_structured_messages(
         messages=msgs,
         tools=tools,
         output_format=output_model,
+        **_effort(model),
     ), usage)
     _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
@@ -209,6 +220,7 @@ def generate_text(
         system=system,
         messages=msgs,
         tools=tools,
+        **_effort(model),
     ), usage)
     _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
@@ -241,6 +253,7 @@ def run_with_web_search(
             system=system,
             messages=msgs,
             tools=tools,
+            **_effort(model),
         ), usage)
         _after_response(model, system, messages, resp, tools)
         if resp.stop_reason == "pause_turn":

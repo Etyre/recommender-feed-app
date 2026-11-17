@@ -275,7 +275,7 @@ def fetch_html_list_source(
             f"Links (URL | anchor text):\n{listing_text}"
         ),
         output_model=ListingResult,
-        max_tokens=4000,
+        max_tokens=8000,  # Haiku 5.5 thinks by default and thinking shares this budget
         usage=usage,
     )
     new_count = 0

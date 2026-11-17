@@ -55,8 +55,8 @@ def _system_blocks(conn: sqlite3.Connection) -> list[dict]:
         + "\n\n# Active instructions from the reader\n"
         + format_instructions(active_instructions(conn))
     )
-    # Cached across all items in a run (note: below Haiku's 4096-token cache minimum this
-    # is silently uncached, which is fine — the prefix is small).
+    # Cached across all items in a run (note: Haiku 5.5 caches prefixes from about 512 tokens up,
+    # so this one is cached; on Haiku 4.5 the minimum was 4096 and it was not).
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
 
@@ -90,7 +90,7 @@ def _apply_triage(
         model=TRIAGE_MODEL,
         system=system,
         user_content=user,
-        max_tokens=2000,
+        max_tokens=6000,  # Haiku 5.5 thinks by default and thinking shares this budget
         usage=usage,
     )
     try:

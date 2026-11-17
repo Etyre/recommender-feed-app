@@ -44,8 +44,8 @@ def _load_env_file() -> None:
 _load_env_file()
 
 # Models
-TRIAGE_MODEL = "claude-haiku-4-5"
-SMART_MODEL = "claude-opus-5"
+TRIAGE_MODEL = "claude-haiku-5-5"
+SMART_MODEL = "claude-opus-5-5"
 
 # Pipeline caps (cost control)
 TRIAGE_MAX_ITEMS_PER_RUN = 60
