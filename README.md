@@ -422,7 +422,8 @@ llm-inbox list                                       # messages the model sent t
 - Sources 10 and 11 are the same blog (URLs differing by a trailing slash) and 3 and 12 are
   both METR (page scan and RSS). Items are deduplicated by URL so nothing shows twice, but each
   is fetched twice per run. Adding a source now refuses a URL or feed that is already there;
-  the existing duplicates were left for Eli to pause.
+  the duplicates were paused on 2026-11-20 (11, and the METR page scan 3: its last 25 items were all
+  in the RSS feed, which also costs no model call).
 - Ranking output (thinking + 75 rationales) sits close to its token budget; at 16k run 288 was
   cut off mid-JSON, which shows up as a pydantic "Invalid JSON: EOF" error, not the
   `max_tokens` message. The budget is 21,000; the SDK refuses non-streaming calls above
