@@ -139,7 +139,7 @@ calendar month forever, locally and on the mirror.
 | `Makefile` | Every task: setup, dev servers, build, pipeline, backup, launchd install/schedule/status, test, logs. |
 | `install.sh` | Idempotent: installs the pipeline launchd agent (`--server` also installs the always-on server; `--app` also builds the desktop app). Wraps `make schedule` / `make install` / `desktop/build.sh`. |
 | `build.sh` | Idempotent frontend build into `frontend/dist` (installs node modules only if missing). |
-| `test.sh` | End-to-end dry run against a throwaway data dir, no API key, no iCloud; also checks the LLM-standard plumbing offline (stubbed replies: a note carries on, `contact_eli` stops). |
+| `test.sh` | End-to-end dry run against a throwaway data dir, no API key, no iCloud; also checks the LLM-standard plumbing offline (stubbed replies: a note carries on, `contact_eli` stops) and, in step 4, regression cases for saved links, auto-dismiss, failed article fetches, dead runs and cut-off replies. |
 | `.env.example` | Template for `<data dir>/.env` (`ANTHROPIC_API_KEY`, optional overrides). |
 | `launchd/com.elityre.recommender-feed.pipeline.plist` | Template: pipeline at 7:30 / 12:30 / 17:30 / 21:30. `__REPO__`, `__DATA__`, `__LOGS__` are substituted by `make`. |
 | `launchd/com.elityre.recommender-feed.server.plist` | Template: always-on API server on port 8000, `RunAtLoad` + `KeepAlive`. |
