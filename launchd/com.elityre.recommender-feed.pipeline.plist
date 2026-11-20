@@ -4,20 +4,26 @@
 <dict>
   <key>Label</key>
   <string>com.elityre.recommender-feed.pipeline</string>
+  <!-- /bin/sh runs the pipeline and starts it again (up to 3 tries, 30s apart) if Python exits
+       with anything but 0 or 3. On 2026-11-17 the 7:30 run died while Python was starting, right
+       after wake ("Fatal Python error: error evaluating path", InterruptedError), and launchd does
+       not retry, so that run was lost. Exit 3 is the pipeline saying it chose to stop (another
+       run in progress, or no network); that is not retried.
+       No WorkingDirectory: sh may not read a folder under ~/Documents and complains on every
+       start. Python finds the app through PYTHONPATH instead. -->
   <key>ProgramArguments</key>
   <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>n=0; while :; do "$0" -m app.pipeline --trigger scheduled; rc=$?; n=$((n+1)); if [ $rc -eq 0 ] || [ $rc -eq 3 ] || [ $n -ge 3 ]; then exit $rc; fi; echo "$(date '+%Y-%m-%d %H:%M:%S') [error] python exited with $rc (try $n of 3); starting the pipeline again in 30s"; sleep 30; done</string>
     <string>__REPO__/backend/.venv/bin/python</string>
-    <string>-m</string>
-    <string>app.pipeline</string>
-    <string>--trigger</string>
-    <string>scheduled</string>
   </array>
-  <key>WorkingDirectory</key>
-  <string>__REPO__/backend</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>FEEDAPP_DATA_DIR</key>
     <string>__DATA__</string>
+    <key>PYTHONPATH</key>
+    <string>__REPO__/backend</string>
   </dict>
   <!-- Calendar intervals coalesce during sleep: missed runs collapse into one on wake. -->
   <key>StartCalendarInterval</key>

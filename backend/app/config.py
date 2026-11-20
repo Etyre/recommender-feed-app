@@ -49,6 +49,7 @@ SMART_MODEL = "claude-opus-5-5"
 
 # Pipeline caps (cost control)
 TRIAGE_MAX_ITEMS_PER_RUN = 60
+TRIAGE_MAX_ATTEMPTS = 3  # unusable replies for one item before it is passed on untriaged
 RANKING_MAX_CANDIDATES = 75
 DISCOVERY_MAX_ITEMS = 10
 DISCOVERY_MAX_SEARCHES = 8

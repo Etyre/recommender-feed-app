@@ -33,7 +33,9 @@ if it exists, else `./data` inside the checkout (gitignored). `make where` print
   is a plain CLI that launchd runs four times a day. Same code path for scheduled and
   manual runs. Stages, in order: **fetch** (RSS via feedparser; non-RSS listing pages
   via a small Haiku call that picks article links out of the page's anchors) →
-  **extract** (trafilatura pulls readable text, content-hash dedup) → **triage** (Haiku:
+  **extract** (trafilatura pulls readable text; PDFs go through pypdf, Google Docs through
+  their plain-text export, LessWrong and Alignment Forum posts through those sites' API;
+  content-hash dedup) → **triage** (Haiku:
   summary, topics, 0–10 relevance, source-filter check; ≤60 items per run) →
   **discovery** (Opus + server-side web search, only when a quest is active) →
   extract/triage the discovered items → **ranking** (one Opus call orders the whole
@@ -141,13 +143,13 @@ calendar month forever, locally and on the mirror.
 | `build.sh` | Idempotent frontend build into `frontend/dist` (installs node modules only if missing). |
 | `test.sh` | End-to-end dry run against a throwaway data dir, no API key, no iCloud; also checks the LLM-standard plumbing offline (stubbed replies: a note carries on, `contact_eli` stops) and, in step 4, regression cases for saved links, auto-dismiss, failed article fetches, dead runs and cut-off replies. |
 | `.env.example` | Template for `<data dir>/.env` (`ANTHROPIC_API_KEY`, optional overrides). |
-| `launchd/com.elityre.recommender-feed.pipeline.plist` | Template: pipeline at 7:30 / 12:30 / 17:30 / 21:30. `__REPO__`, `__DATA__`, `__LOGS__` are substituted by `make`. |
+| `launchd/com.elityre.recommender-feed.pipeline.plist` | Template: pipeline at 7:30 / 12:30 / 17:30 / 21:30, started through a small `/bin/sh` loop that starts it again if Python itself fails to start. `__REPO__`, `__DATA__`, `__LOGS__` are substituted by `make`. |
 | `launchd/com.elityre.recommender-feed.server.plist` | Template: always-on API server on port 8000, `RunAtLoad` + `KeepAlive`. |
 | `desktop/main.swift` | The desktop app: window, web view, menus, external links, JS dialogs, zoom, waiting page, `--test`. |
 | `desktop/build.sh` | Idempotent: compiles the app, makes its icon from `frontend/public/icon-512.png`, ad-hoc signs it, installs to `~/Applications`. |
 | `deploy.sh` | Updates the running server and the installed app for whatever the last commit (or a given range, or `--all`) changed. |
 | `hooks/post-commit`, `hooks/post-merge` | Run `deploy.sh` in the background after every commit and pull. Active once `install.sh` has set `core.hooksPath`. |
-| `backend/requirements.txt` | fastapi, uvicorn, anthropic, feedparser, trafilatura, httpx, pydantic. |
+| `backend/requirements.txt` | fastapi, uvicorn, anthropic, feedparser, trafilatura, httpx, pydantic, pypdf (added 2026-11-20: saved papers and reports are often PDFs, and nothing else here can read one; pure Python, no further dependencies). |
 | `backend/app/main.py` | FastAPI app: routers, CORS for the Vite dev server, no-cache for `index.html`, static frontend. |
 | `backend/app/config.py` | Data-dir resolution, `.env` loading, model names (`claude-haiku-5-5`, `claude-opus-5-5`), every cap and threshold. |
 | `backend/app/db.py` | SQLite connection (WAL, busy timeout, foreign keys) and migrations runner (`PRAGMA user_version`). |
@@ -297,6 +299,23 @@ llm-inbox list                                       # messages the model sent t
 
 ## Gotchas learned
 
+- What a plain page fetch gets nothing useful from (all handled in `extraction.fetch_title_and_text`
+  since 2026-11-20): a PDF (no text at all); a Google Doc (a "JavaScript required" shell); and a
+  LessWrong or Alignment Forum post, where trafilatura returns only the comment thread, so saved
+  posts were being summarised and scored from their comments. Sites that refuse the fetch
+  outright (openai.com and reuters.com answer 403) still end up with no text and are judged
+  from the title.
+- A saved link whose page could not be fetched at the moment of saving used to be stored with
+  empty text, which is final. 40 links saved in one batch on 2026-08-28 were like that, mostly
+  LessWrong posts that fetch fine. Now the text is left unset, the link is not triaged on the
+  spot, and the next pipeline run fetches it, fixes its URL-made title and triages it. The old
+  ones were refetched on 2026-11-20.
+- The scheduled job runs through `/bin/sh -c` so a Python that dies while starting (seen once,
+  2026-11-17 7:30, right after wake) is started again. `/bin/sh` under launchd cannot read
+  `~/Documents`, so the job has no `WorkingDirectory` (sh prints a getcwd error on every start
+  if it has one) and Python gets the app through `PYTHONPATH`. The pipeline exits 3, not 1, when
+  it chooses to stop, so that is not retried. Run `./install.sh` after changing the plist.
+
 - Auto-deploy builds from the working tree, not from a clean checkout of the commit: any
   uncommitted edits sitting in `frontend/`, `backend/` or `desktop/` at commit time go live too.
 - The hooks only run if `git config core.hooksPath` says `hooks` (set by `install.sh`; a fresh
@@ -332,8 +351,10 @@ llm-inbox list                                       # messages the model sent t
   inputs, 12 runs each: forced format 5 of 48 called the tool, this setup 0 of 48. A `note_to_reader` field
   in the schema made it much worse (15 of 32). On a request it should refuse (invent quotes to get an author
   fired) it still contacted Eli 11 of 12 times, the same as before. The remaining miss both before and after:
-  a refusal that never calls the tool. Now that is a reply with no JSON; the item stays `new`, is retried each
-  run, and the full reply is in the pipeline log (`grep "no usable JSON" ~/Library/Logs/recommender-feed.log`).
+  a refusal that never calls the tool. Now that is a reply with no JSON; the item stays `new` and is retried on
+  the next run, and the full reply is in the pipeline log (`grep "no usable result" ~/Library/Logs/recommender-feed.log`).
+  After 3 such replies for one item (`items.triage_attempts`, `TRIAGE_MAX_ATTEMPTS`) it is passed on with score 5 and
+  a summary saying so, instead of costing a call on every run for good (item 2118 was asked five runs running).
   Haiku's remarks before the JSON are logged as `[triage] item N remarks:`. Reasoning first also moves scores a
   little (14 items re-triaged: most within 1 point, three dropped 3). Do not reword the last two paragraphs of
   `TRIAGE_SYSTEM` without replaying; full counts are in `shared/README.md`.

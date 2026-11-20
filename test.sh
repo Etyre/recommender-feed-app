@@ -212,6 +212,67 @@ conn.commit()
 runs = {r["id"]: r["status"] for r in pipeline_router.list_runs(limit=5, conn=conn)}
 assert runs[dead] == "error" and runs[just_started] == "running", runs
 
+# Triage: an unusable reply is retried twice more, then the item is passed on with a neutral score.
+from app.services import triage
+stuck = item("https://t.example/stuck", state="new", score=None)
+conn.commit()
+def reply(text_):
+    m = Message.model_validate({"id": "m", "type": "message", "role": "assistant", "model": "fake-model",
+        "content": [{"type": "text", "text": text_}], "stop_reason": "end_turn", "stop_sequence": None,
+        "usage": {"input_tokens": 1, "output_tokens": 1}})
+    llm.get_client = lambda: SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: m))
+reply("I can't assess this one.")
+row = lambda: conn.execute(triage._ITEM_QUERY + " WHERE i.id = ?", (stuck,)).fetchone()
+for attempt in (1, 2):
+    try:
+        triage._apply_triage(conn, [{"type": "text", "text": "S"}], row(), llm.UsageTracker())
+        raise AssertionError("an unusable reply was accepted")
+    except ValueError:
+        assert state(stuck) == "new"
+assert triage._apply_triage(conn, [{"type": "text", "text": "S"}], row(), llm.UsageTracker()) == "triaged"
+got = conn.execute("SELECT state, triage_score, triage_attempts, summary FROM items WHERE id = ?", (stuck,)).fetchone()
+assert (got[0], got[1], got[2]) == ("triaged", 5, 3) and "no usable result" in got[3], tuple(got)
+
+# A saved link whose fetch fails is kept with no text (not ''), is not triaged yet, and the
+# pipeline's extract stage then fetches it and replaces the URL-made title.
+from app.services import fetching
+def blocked(url): raise httpx.ConnectError("offline")
+real_fetch, extraction.fetch_title_and_text = extraction.fetch_title_and_text, blocked
+try:
+    link = fetching.add_user_item(conn, "https://t.example/posts/some-saved-essay")
+finally:
+    extraction.fetch_title_and_text = real_fetch
+conn.commit()
+got = conn.execute("SELECT title, content_text, state FROM items WHERE id = ?", (link,)).fetchone()
+assert tuple(got) == ("Some saved essay", None, "new"), tuple(got)
+reply("should not be called")
+triage.triage_single(conn, link)
+assert state(link) == "new"
+extraction.fetch_title_and_text = lambda url: ("The Real Title", "body text " * 50)
+try:
+    extraction.extract_pending(conn)
+finally:
+    extraction.fetch_title_and_text = real_fetch
+got = conn.execute("SELECT title, length(content_text) FROM items WHERE id = ?", (link,)).fetchone()
+assert tuple(got) == ("The Real Title", 500), tuple(got)
+
+# PDF text extraction (a small PDF made here) and the URL patterns for arXiv, Google Docs, LessWrong.
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+import io
+w = PdfWriter(); page = w.add_blank_page(width=300, height=300)
+font = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"), NameObject("/BaseFont"): NameObject("/Helvetica")})
+page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): w._add_object(font)})})
+stream = DecodedStreamObject(); stream.set_data(b"BT /F1 12 Tf 20 200 Td (Hello from a test PDF about evaluations) Tj ET")
+page[NameObject("/Contents")] = w._add_object(stream)
+buf = io.BytesIO(); w.write(buf)
+title, text_ = extraction._pdf_title_and_text(buf.getvalue())
+assert "Hello from a test PDF" in text_, repr(text_)
+assert extraction._pdf_title_and_text(b"not a pdf") == (None, "")
+assert extraction.ARXIV_PDF.match("https://arxiv.org/pdf/2411.00986v2.pdf").group(1) == "2411.00986v2"
+assert extraction.GOOGLE_DOC.match("https://docs.google.com/document/d/1AbC-d_9/edit?tab=t.0").group(1) == "1AbC-d_9"
+assert extraction.FORUM_POST.match("https://www.lesswrong.com/posts/vJFdjigzmcXMhNTsx/simulators#x").group(2) == "vJFdjigzmcXMhNTsx"
+
 # A text reply cut off at max_tokens is an error, not an answer (it could be a taste profile).
 cut = Message.model_validate({"id": "m", "type": "message", "role": "assistant", "model": "fake-model",
     "content": [{"type": "text", "text": "# Taste profile\n## Strong inter"}], "stop_reason": "max_tokens",

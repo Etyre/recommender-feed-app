@@ -5,7 +5,7 @@ import json
 import sqlite3
 import time
 
-from ..config import TRIAGE_CONTENT_CHARS, TRIAGE_MAX_ITEMS_PER_RUN, TRIAGE_MODEL
+from ..config import TRIAGE_CONTENT_CHARS, TRIAGE_MAX_ATTEMPTS, TRIAGE_MAX_ITEMS_PER_RUN, TRIAGE_MODEL
 from ..schemas import TriageResult
 from . import llm
 from .common import active_instructions, format_instructions, profile_text, set_item_state
@@ -86,20 +86,42 @@ def _apply_triage(
         f"Published: {row['published_at'] or 'unknown'}\n\n"
         f"Content (may be truncated):\n{content or '(content unavailable — judge from the title)'}"
     )
-    text = llm.generate_text(
-        model=TRIAGE_MODEL,
-        system=system,
-        user_content=user,
-        max_tokens=6000,  # Haiku 5.5 thinks by default and thinking shares this budget
-        usage=usage,
-    )
+    text = ""
     try:
+        text = llm.generate_text(
+            model=TRIAGE_MODEL,
+            system=system,
+            user_content=user,
+            max_tokens=6000,  # Haiku 5.5 thinks by default and thinking shares this budget
+            usage=usage,
+        )
         result = TriageResult.model_validate(llm.extract_json_object(text))
-    except Exception:
-        # A reply with no usable JSON may be the model declining in prose instead of calling contact_eli.
-        # It is not sent anywhere, so make it findable: the item stays 'new' and is retried next run.
-        _log(f"[triage] item {row['id']} gave no usable JSON, left as new. Full reply: {text!r}")
-        raise
+    except (ValueError, llm.LLMRefusal) as e:
+        # The model answered, but not with a usable result: no JSON (it may be declining in prose
+        # instead of calling contact_eli), a reply cut off at max_tokens, or a refusal. None of that
+        # is sent anywhere, so make it findable in the log. Connection and API errors are not
+        # counted here: they say nothing about the item, and it is simply retried next run.
+        attempts = conn.execute(
+            "UPDATE items SET triage_attempts = triage_attempts + 1 WHERE id = ? RETURNING triage_attempts",
+            (row["id"],),
+        ).fetchone()[0]
+        conn.commit()
+        if attempts < TRIAGE_MAX_ATTEMPTS:
+            _log(f"[triage] item {row['id']} gave no usable result ({type(e).__name__}), attempt "
+                 f"{attempts} of {TRIAGE_MAX_ATTEMPTS}, left as new. Full reply: {text!r}")
+            raise
+        # Item 2118 was retried on five runs running. Stop asking: pass the item on with a neutral
+        # score and a summary that says what happened, so it is ranked or listed like any other.
+        _log(f"[triage] item {row['id']} gave no usable result {attempts} times; passed on untriaged. "
+             f"Last reply: {text!r}")
+        conn.execute(
+            "UPDATE items SET summary = ?, topics = '[]', triage_score = 5 WHERE id = ?",
+            (f"(No summary: the triage model gave no usable result for this item in {attempts} attempts.)",
+             row["id"]),
+        )
+        set_item_state(conn, row["id"], "triaged")
+        conn.commit()
+        return "triaged"
     remarks = text.split("```")[0].strip()
     if remarks:
         _log(f"[triage] item {row['id']} remarks: {remarks!r}")
@@ -129,7 +151,9 @@ def _apply_triage(
 def triage_single(conn: sqlite3.Connection, item_id: int, usage: llm.UsageTracker | None = None) -> None:
     """Immediate triage of one item (used when the user saves a link)."""
     row = conn.execute(
-        _ITEM_QUERY + " WHERE i.id = ? AND i.state = 'new'", (item_id,)
+        # No text yet (the fetch failed when the link was saved): leave it for the pipeline, which
+        # fetches again before it triages.
+        _ITEM_QUERY + " WHERE i.id = ? AND i.state = 'new' AND i.content_text IS NOT NULL", (item_id,)
     ).fetchone()
     if row is None:
         return
