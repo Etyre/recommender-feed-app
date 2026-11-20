@@ -3,10 +3,12 @@ refusal handling. Every LLM stage goes through here.
 
 This is also where the agent-coding LLM standard is enforced for every call site:
 the shared preamble (shared/llm-system-prompt-preamble.md) is prepended to every
-system prompt, the `contact_eli` tool is offered on every call, a `contact_eli` call is
+system prompt, the `contact_eli` and `note_to_eli` tools are offered on every call, a `contact_eli` call is
 followed by one question, send or keep working (llm_contact.with_confirm), and every response is
 checked with llm_contact.check(). If the model contacts Eli, LLMContacted is raised and
-the caller must stop the task it was doing (no retry, no pushing past it)."""
+the caller must stop the task it was doing (no retry, no pushing past it).
+A `note_to_eli` call does not stop anything: the note is recorded, the call is answered and the
+model is asked again for its answer (llm_contact.with_notes, in _confirmed)."""
 from __future__ import annotations
 
 import json
@@ -25,6 +27,7 @@ import llm_contact  # noqa: E402  (shared/llm_contact.py, standard library only)
 
 APP_NAME = "recommender-feed"
 CONTACT_TOOL = llm_contact.CONTACT_TOOL
+CONTACT_TOOLS = llm_contact.CONTACT_TOOLS  # contact_eli (stops the task) and note_to_eli (task carries on)
 
 # USD per million tokens (input, output)
 PRICES = {
@@ -131,7 +134,8 @@ def _after_response(model: str, system: Any, messages: list, resp: Any, tools: l
 
 def _confirmed(model: str, system: Any, tools: list, messages: list, call: Any,
                usage: "UsageTracker | None") -> tuple[list, Any]:
-    """Make the call; if the model calls contact_eli, ask it once whether it meant to reach Eli or was remarking
+    """Make the call. If the model only leaves a note (note_to_eli), record it, answer the tool call and ask
+    again, so a note never stops the task and is never taken for its answer. If the model calls contact_eli, ask it once whether it meant to reach Eli or was remarking
     on the task (shared confirm step, active only for the models in llm_contact.CONFIRM_MODELS: Haiku 4.5 otherwise uses the tool for routine remarks on JSON-only calls).
     `call(messages)` is the real call. Returns (messages, response) for _after_response; every call is counted."""
     def counted(msgs: list, decide: bool = False) -> Any:
@@ -143,7 +147,18 @@ def _confirmed(model: str, system: Any, tools: list, messages: list, call: Any,
         if usage is not None:
             usage.add(model, r.usage)
         return r
-    return llm_contact.with_confirm(APP_NAME, model, messages, counted(messages), counted)
+    messages, resp = llm_contact.with_notes(APP_NAME, model, system, messages, counted(messages), counted, tools)
+    return llm_contact.with_confirm(APP_NAME, model, messages, resp, counted)
+
+
+def _said_before(turns: list) -> str:
+    """Text the model wrote in the turns _confirmed added (before a note_to_eli call, say). A model that gives
+    its answer and leaves a note in the same reply may not repeat the answer when asked again, so keep it."""
+    return "".join(
+        b["text"] + "\n"
+        for m in turns if m.get("role") == "assistant" and isinstance(m.get("content"), list)
+        for b in m["content"] if isinstance(b, dict) and b.get("type") == "text"
+    )
 
 
 def _check_refusal(resp: Any) -> None:
@@ -162,7 +177,7 @@ def parse_structured_messages(
     usage: UsageTracker | None = None,
 ) -> T:
     system = with_preamble(system)
-    tools = [CONTACT_TOOL]
+    tools = list(CONTACT_TOOLS)
     messages, resp = _confirmed(model, system, tools, messages, lambda msgs: get_client().messages.parse(
         model=model,
         max_tokens=max_tokens,
@@ -212,8 +227,9 @@ def generate_text(
     usage: UsageTracker | None = None,
 ) -> str:
     system = with_preamble(system)
-    tools = [CONTACT_TOOL]
+    tools = list(CONTACT_TOOLS)
     messages = [{"role": "user", "content": user_content}]
+    asked = len(messages)
     messages, resp = _confirmed(model, system, tools, messages, lambda msgs: get_client().messages.create(
         model=model,
         max_tokens=max_tokens,
@@ -224,7 +240,7 @@ def generate_text(
     ), usage)
     _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
-    return "".join(b.text for b in resp.content if b.type == "text")
+    return _said_before(messages[asked:]) + "".join(b.text for b in resp.content if b.type == "text")
 
 
 def run_with_web_search(
@@ -241,12 +257,14 @@ def run_with_web_search(
     Handles pause_turn continuation (server-side search loop hit its iteration cap)."""
     system = with_preamble(system)
     tools = [
-        CONTACT_TOOL,
+        *CONTACT_TOOLS,
         {"type": "web_search_20260209", "name": "web_search", "max_uses": max_uses},
     ]
     messages: list[dict] = [{"role": "user", "content": user_content}]
     resp = None
+    said = ""
     for _ in range(max_continuations + 1):
+        asked = len(messages)
         messages, resp = _confirmed(model, system, tools, messages, lambda msgs: get_client().messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -256,13 +274,14 @@ def run_with_web_search(
             **_effort(model),
         ), usage)
         _after_response(model, system, messages, resp, tools)
+        said += _said_before(messages[asked:])
         if resp.stop_reason == "pause_turn":
             messages = messages + [{"role": "assistant", "content": resp.content}]
             continue
         break
     assert resp is not None
     _check_refusal(resp)
-    return "".join(b.text for b in resp.content if b.type == "text")
+    return said + "".join(b.text for b in resp.content if b.type == "text")
 
 
 def extract_json_object(text: str) -> dict:

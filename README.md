@@ -99,6 +99,15 @@ records the message in the run's error field; a chat turn returns HTTP 409 and t
 shows the message. Nothing is retried. Read and answer with `llm-inbox`
 (see `shared/README.md`).
 
+Every call also offers `note_to_eli` (added 2026-11-20), which leaves Eli a message without
+stopping anything. `llm.py` runs `llm_contact.with_notes` before the confirm step on every call:
+the note is recorded in the LLM inbox (`via: note`, `halts: false`), the tool call is answered
+with `NOTE_RESULT_TEXT`, and the model is asked again for its answer (one extra call per note
+reply, counted in the run's usage, at most 3 rounds). A note is never the task's answer and
+never raises `LLMContacted`. For the prose calls (triage, profile, discovery) any text the model
+wrote before the note call is kept in front of the second reply, so an answer given in the same
+reply as a note is not lost.
+
 **Costs.** Hard caps per run: ≤60 triage calls (Haiku), 1 ranking call and ≤1 discovery
 call (Opus, ≤8 web searches). Roughly $0.50–0.75/run; the per-run estimate is shown
 next to the Refresh button and a 30-day daily spend indicator sits in the header
@@ -130,7 +139,7 @@ calendar month forever, locally and on the mirror.
 | `Makefile` | Every task: setup, dev servers, build, pipeline, backup, launchd install/schedule/status, test, logs. |
 | `install.sh` | Idempotent: installs the pipeline launchd agent (`--server` also installs the always-on server; `--app` also builds the desktop app). Wraps `make schedule` / `make install` / `desktop/build.sh`. |
 | `build.sh` | Idempotent frontend build into `frontend/dist` (installs node modules only if missing). |
-| `test.sh` | End-to-end dry run against a throwaway data dir, no API key, no iCloud; also checks the LLM-standard plumbing offline. |
+| `test.sh` | End-to-end dry run against a throwaway data dir, no API key, no iCloud; also checks the LLM-standard plumbing offline (stubbed replies: a note carries on, `contact_eli` stops). |
 | `.env.example` | Template for `<data dir>/.env` (`ANTHROPIC_API_KEY`, optional overrides). |
 | `launchd/com.elityre.recommender-feed.pipeline.plist` | Template: pipeline at 7:30 / 12:30 / 17:30 / 21:30. `__REPO__`, `__DATA__`, `__LOGS__` are substituted by `make`. |
 | `launchd/com.elityre.recommender-feed.server.plist` | Template: always-on API server on port 8000, `RunAtLoad` + `KeepAlive`. |
@@ -152,7 +161,7 @@ calendar month forever, locally and on the mirror.
 | `backend/app/routers/instructions.py` | Quests and standing preferences. |
 | `backend/app/routers/pipeline.py` | Start a manual run, list runs, daily LLM spend. |
 | `backend/app/routers/conversation.py` | Chat with the interview agent; accept proposed instructions. |
-| `backend/app/services/llm.py` | Anthropic wrapper: preamble, `contact_eli`, `check()`, structured outputs, usage/cost, refusals. |
+| `backend/app/services/llm.py` | Anthropic wrapper: preamble, `contact_eli` and `note_to_eli`, `check()`, structured outputs, usage/cost, refusals. |
 | `backend/app/services/fetching.py` | RSS fetch, listing-page fetch (Haiku), URL canonicalization, user-saved links. |
 | `backend/app/services/extraction.py` | Article text extraction (trafilatura), og:title, content-hash dedup. |
 | `backend/app/services/triage.py` | Per-item Haiku triage (prose, then fenced JSON); cached system prefix per run. |
@@ -338,6 +347,14 @@ llm-inbox list                                       # messages the model sent t
   objection half (does it still contact Eli about a request it should refuse) was not rerun on Haiku 5.5. The
   Haiku 4.5 measurements in this section describe the old model; if routine `contact_eli` calls start
   stopping runs, replay again before rewording.
+- `note_to_eli` went in on 2026-11-20 at night with `api.anthropic.com` blocked, so it has only been run
+  against stubbed replies (`./test.sh`, step 1b), never a real model. Not yet known: whether Haiku 5.5 in
+  triage uses it to flag articles for the reader (the old `contact_eli` habit; each note costs one more
+  call and notifies Eli, but no longer stops the run), whether a real objection still goes to `contact_eli`
+  rather than the note tool (which answers "carry on"), and whether the API accepts a discovery turn with
+  web-search blocks replayed after a note. The triage prompt's last paragraph names only `contact_eli`; it
+  was left as measured. Replay triage before rewording it, and watch the inbox for notes after the first
+  real runs.
 - Haiku 5.5 caches prompts from about 512 tokens up (Haiku 4.5 needed 4096), so the triage system prefix is
   now cached across a run.
 - Many sites (Reuters, paywalls) block non-browser fetchers. A user-saved link must still
