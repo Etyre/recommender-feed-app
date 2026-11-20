@@ -191,14 +191,20 @@ def _struct_time_to_iso(t) -> str | None:
 
 def fetch_rss_source(conn: sqlite3.Connection, source: sqlite3.Row) -> int:
     feed_url = source["feed_url"] or source["url"]
-    d = feedparser.parse(
-        feed_url,
-        etag=source["etag"],
-        modified=source["last_modified"],
-        agent=USER_AGENT,
-    )
-    if getattr(d, "status", None) == 304:
+    # Download with httpx and hand feedparser the bytes: feedparser's own download has no
+    # timeout, so one stalled server could hold the whole run (and the pipeline lock) forever.
+    headers = dict(HEADERS)
+    if source["etag"]:
+        headers["If-None-Match"] = source["etag"]
+    if source["last_modified"]:
+        headers["If-Modified-Since"] = source["last_modified"]
+    resp = httpx.get(feed_url, headers=headers, follow_redirects=True, timeout=30)
+    if resp.status_code == 304:
         return 0
+    resp.raise_for_status()
+    d = feedparser.parse(
+        resp.content, response_headers={"content-type": resp.headers.get("content-type", "")}
+    )
     if getattr(d, "bozo", False) and not d.entries:
         raise RuntimeError(f"feed parse failed: {getattr(d, 'bozo_exception', 'unknown')}")
     new_count = 0
@@ -231,7 +237,7 @@ def fetch_rss_source(conn: sqlite3.Connection, source: sqlite3.Row) -> int:
             new_count += 1
     conn.execute(
         "UPDATE sources SET etag = ?, last_modified = ? WHERE id = ?",
-        (getattr(d, "etag", None), getattr(d, "modified", None), source["id"]),
+        (resp.headers.get("etag"), resp.headers.get("last-modified"), source["id"]),
     )
     return new_count
 

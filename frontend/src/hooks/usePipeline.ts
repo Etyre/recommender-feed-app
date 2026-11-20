@@ -8,6 +8,7 @@ export function usePipeline(onFinished: () => void) {
   const prevRunning = useRef(false);
   const onFinishedRef = useRef(onFinished);
   onFinishedRef.current = onFinished;
+  const tickRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let alive = true;
@@ -24,6 +25,7 @@ export function usePipeline(onFinished: () => void) {
         /* server not up yet — keep polling */
       }
     };
+    tickRef.current = tick;
     tick();
     const id = setInterval(tick, 3000);
     return () => {
@@ -36,6 +38,7 @@ export function usePipeline(onFinished: () => void) {
     try {
       await api.runPipeline();
       prevRunning.current = true;
+      tickRef.current(); // show "running" now, not at the next 3-second poll
     } catch (e) {
       alert(`Could not start run: ${e instanceof Error ? e.message : e}`);
     }

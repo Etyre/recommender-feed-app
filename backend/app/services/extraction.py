@@ -57,7 +57,8 @@ def _content_hash(text: str) -> str | None:
 def extract_pending(conn: sqlite3.Connection, limit: int = 50) -> dict:
     stats = {"extracted": 0, "failed": 0, "deduped": 0}
     rows = conn.execute(
-        "SELECT id, url FROM items WHERE content_text IS NULL AND state = 'new' "
+        "SELECT id, url, discovered_at < datetime('now', '-2 days') AS old "
+        "FROM items WHERE content_text IS NULL AND state = 'new' "
         "ORDER BY id LIMIT ?",
         (limit,),
     ).fetchall()
@@ -67,6 +68,13 @@ def extract_pending(conn: sqlite3.Connection, limit: int = 50) -> dict:
             resp = httpx.get(row["url"], headers=HEADERS, follow_redirects=True, timeout=30)
             resp.raise_for_status()
             text = trafilatura.extract(resp.text, url=row["url"]) or ""
+        except httpx.TransportError:
+            # No connection or a timeout says nothing about the page. Storing '' here would be
+            # permanent: the item is then triaged from its title alone and never fetched again.
+            # Leave it NULL so the next run retries, for two days, then give up as below.
+            stats["failed"] += 1
+            if not row["old"]:
+                continue
         except Exception:
             stats["failed"] += 1
         text = text[:CONTENT_MAX_CHARS]

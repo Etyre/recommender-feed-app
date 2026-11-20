@@ -34,12 +34,14 @@ export function AddSourceForm({ onAdded }: { onAdded: () => void }) {
       <div className="add-source-fields">
         <input
           placeholder="https://example.com/blog"
+          spellCheck={false}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <input
           placeholder="Name (optional)"
+          spellCheck={true}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />

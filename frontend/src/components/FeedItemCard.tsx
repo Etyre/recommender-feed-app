@@ -4,7 +4,11 @@ import { RatingWidget } from "./RatingWidget";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
+  // A bare date ("2026-11-17") is a calendar day: new Date() would read it as UTC midnight and
+  // show the day before in US time zones. Feed timestamps without a zone are UTC.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? new Date(`${iso}T12:00:00`)
+    : new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso.replace(" ", "T")}Z`);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }

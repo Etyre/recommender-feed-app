@@ -56,6 +56,7 @@ def auto_dismiss_stale(conn: sqlite3.Connection) -> int:
     cur = conn.execute(
         """UPDATE items SET state = 'dismissed', state_changed_at = datetime('now')
            WHERE state IN ('triaged','shown')
+             AND found_by != 'user'  -- a link the reader saved is theirs to dismiss (52 were swept away on 2026-09-27)
              AND COALESCE(triage_score, 10) <= ?
              AND COALESCE(published_at, discovered_at) < datetime('now', ?)""",
         (AUTO_DISMISS_MAX_TRIAGE, f"-{AUTO_DISMISS_DAYS} days"),

@@ -42,7 +42,7 @@ export function RatingWidget({
     initialReadingNotes ?? ""
   );
   const [expanded, setExpanded] = useState(startExpanded ?? !initialRating);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const lastSaved = useRef({ note: initialNote ?? "", readingNotes: initialReadingNotes ?? "" });
 
   const dirty =
@@ -63,7 +63,11 @@ export function RatingWidget({
           onSaved?.();
         }
       })
-      .catch(() => setSaveState("idle"));
+      .catch(() => {
+        // The button already shows as selected; without this a rating the server never got
+        // looked saved. The notes stay in their drafts.
+        setSaveState("failed");
+      });
   };
 
   const choose = (value: Rating) => {
@@ -115,10 +119,17 @@ export function RatingWidget({
           </button>
         ))}
       </div>
+      {saveState === "failed" && (
+        <p className="error">
+          Not saved — the server did not answer.{" "}
+          {rating && <button className="link-btn" onClick={() => save(rating)}>Try again</button>}
+        </p>
+      )}
       {rating && (
         <>
           <textarea
             className="note-box"
+            spellCheck={true}
             rows={3}
             placeholder="Your reading notes (optional) — paste whatever you wrote while reading; the AI infers what mattered to you from them."
             value={readingNotes}
@@ -127,6 +138,7 @@ export function RatingWidget({
           />
           <textarea
             className="note-box"
+            spellCheck={true}
             rows={2}
             placeholder="To the AI (optional) — tell it directly what was or wasn't valuable here."
             value={note}

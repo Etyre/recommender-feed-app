@@ -9,7 +9,7 @@ from ..config import has_llm_credentials
 from ..schemas import LinkIn, ProfileIn, RatingIn, StateIn
 from ..services.common import get_latest_profile, set_item_state
 from ..services.fetching import add_user_item
-from ..services.llm import LLMContacted
+from ..services.llm import LLMContacted, UsageTracker
 from ..services.triage import triage_single
 from .deps import get_db
 
@@ -91,10 +91,15 @@ def get_feed(conn: sqlite3.Connection = Depends(get_db)):
         # Ranking only sees the top RANKING_MAX_CANDIDATES by triage score, so many saved
         # links are never ranked; listing them here keeps them reachable. Links saved since
         # the latest ranking run come first within this tail, then best triage score first.
+        # 'shown' counts too: a saved link that was ranked once and then fell out of the 75
+        # keeps that state, and used to vanish from the feed (29 of them by 2026-11-20). So
+        # does opened-but-unrated, as for ranked items, so it can still be rated.
         unranked_user = conn.execute(
             """SELECT i.*, s.name AS source_name
                FROM items i LEFT JOIN sources s ON s.id = i.source_id
-               WHERE i.found_by = 'user' AND i.state IN ('new', 'triaged')
+               WHERE i.found_by = 'user'
+                 AND (i.state IN ('new', 'triaged', 'shown') OR
+                      (i.state = 'read' AND NOT EXISTS (SELECT 1 FROM ratings r WHERE r.item_id = i.id)))
                  AND i.id NOT IN
                    (SELECT item_id FROM feed_rankings WHERE pipeline_run_id = ?)
                ORDER BY i.discovered_at >= (SELECT started_at FROM pipeline_runs WHERE id = ?) DESC,
@@ -138,12 +143,22 @@ def add_link(body: LinkIn, conn: sqlite3.Connection = Depends(get_db)):
         raise HTTPException(422, f"could not fetch that page: {e}")
     conn.commit()
     if has_llm_credentials():
+        usage = UsageTracker()
         try:
-            triage_single(conn, item_id)  # instant summary; pipeline retries on failure
+            triage_single(conn, item_id, usage)  # instant summary; pipeline retries on failure
         except LLMContacted as e:
             raise HTTPException(409, f"link saved, but {e}")
         except Exception:  # noqa: BLE001
             pass
+        finally:
+            summary = usage.summary()
+            if summary["calls"]:  # so the cost widget counts it, as it does chat turns
+                conn.execute(
+                    """INSERT INTO llm_usage_log (context, input_tokens, output_tokens, est_cost_usd)
+                       VALUES ('saved_link', ?, ?, ?)""",
+                    (summary["input_tokens"], summary["output_tokens"], summary["est_cost_usd"]),
+                )
+                conn.commit()
     row = conn.execute(
         """SELECT i.*, s.name AS source_name
            FROM items i LEFT JOIN sources s ON s.id = i.source_id WHERE i.id = ?""",

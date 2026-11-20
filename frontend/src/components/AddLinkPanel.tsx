@@ -38,6 +38,7 @@ export function AddLinkPanel() {
       <div className="add-source-fields">
         <input
           placeholder="https://example.com/some-article"
+          spellCheck={false}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}

@@ -395,7 +395,34 @@ llm-inbox list                                       # messages the model sent t
   Six exact duplicates from July (ids 14-19) were set to `archived` on 2026-11-12.
 - Scheduled runs that fire on wake can start before Wi-Fi is up: the run finishes in two
   seconds with "ranking: Connection error." and the feed keeps its old order (runs 280, 284-286).
-  The pipeline now waits up to 3 minutes for `api.anthropic.com:443` before the fetch stage.
+  The pipeline waits for `api.anthropic.com:443` before the fetch stage (stage "waiting for
+  network") and again before each LLM stage. The wait is counted in checks, not clock time: the
+  first version allowed 180 seconds by the clock, which keeps running while the Mac sleeps, so
+  a run that started in a short network-less wake went ahead offline the moment the Mac next
+  woke (runs 297, 300, 301, 314). After 20 minutes awake with no network the run ends as
+  `error` with nothing fetched; the next scheduled run tries again.
+- Saved links were being lost in two ways, both fixed 2026-11-20. Auto-dismiss (triage score 3
+  or less and older than 30 days) applied to them: 52 were dismissed in one sweep on 2026-09-27,
+  most of them links whose page could not be fetched, which triage scores near 0 from the title
+  alone. And the feed's tail of unranked saved links only listed states `new` and `triaged`, so
+  a saved link that had been ranked once (`shown`) and then fell out of the top 75, or that was
+  opened but not rated, was in no list at all (29 such links). The 52 are still `dismissed`;
+  they are the rows with `found_by='user' AND state_changed_at LIKE '2026-09-27 04:31%'`.
+- A network failure while fetching an article's text used to store `''`, which is permanent:
+  the item is triaged from its title and never fetched again. Connection errors and timeouts
+  now leave the text unset so the next run retries, for two days. An HTTP error (403, 404) or
+  an empty extraction still stores `''`.
+- feedparser's own downloader has no timeout. Feeds are downloaded with httpx (30s) and the
+  bytes handed to feedparser; checked 2026-11-20 against all nine RSS sources, same entries.
+- A run that is killed (server restart, reboot) leaves its row `running`. The UI then showed
+  "running" with Refresh disabled for up to an hour. Every live run holds `pipeline.lock`, so
+  the server now closes any `running` row older than a minute when the lock is free.
+- `generate_text` (triage, profile) did not check for a reply cut off at `max_tokens`; a
+  truncated taste profile would have been stored and used. It raises now, like the structured calls.
+- Sources 10 and 11 are the same blog (URLs differing by a trailing slash) and 3 and 12 are
+  both METR (page scan and RSS). Items are deduplicated by URL so nothing shows twice, but each
+  is fetched twice per run. Adding a source now refuses a URL or feed that is already there;
+  the existing duplicates were left for Eli to pause.
 - Ranking output (thinking + 75 rationales) sits close to its token budget; at 16k run 288 was
   cut off mid-JSON, which shows up as a pydantic "Invalid JSON: EOF" error, not the
   `max_tokens` message. The budget is 21,000; the SDK refuses non-streaming calls above

@@ -40,6 +40,7 @@ export function InstructionsPanel() {
       <h2>Instruct your feed</h2>
       <div className="instruction-form">
         <textarea
+          spellCheck={true}
           placeholder={
             kind === "quest"
               ? 'e.g. "Find anything relevant to the recent Hugging Face event not covered by my sources."'

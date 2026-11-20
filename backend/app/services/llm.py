@@ -167,6 +167,13 @@ def _check_refusal(resp: Any) -> None:
         raise LLMRefusal(str(detail) if detail else "model refused the request")
 
 
+def _check_truncated(resp: Any) -> None:
+    """Thinking and the reply share max_tokens, so a reply can stop mid-sentence. A cut-off
+    taste profile would be stored and then read by every later triage and ranking call."""
+    if resp.stop_reason == "max_tokens":
+        raise ValueError("output truncated at max_tokens — increase the budget")
+
+
 def parse_structured_messages(
     *,
     model: str,
@@ -240,6 +247,7 @@ def generate_text(
     ), usage)
     _after_response(model, system, messages, resp, tools)
     _check_refusal(resp)
+    _check_truncated(resp)
     return _said_before(messages[asked:]) + "".join(b.text for b in resp.content if b.type == "text")
 
 
@@ -281,6 +289,7 @@ def run_with_web_search(
         break
     assert resp is not None
     _check_refusal(resp)
+    _check_truncated(resp)
     return said + "".join(b.text for b in resp.content if b.type == "text")
 
 

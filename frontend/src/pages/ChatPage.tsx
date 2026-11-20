@@ -108,6 +108,7 @@ export function ChatPage({ onSeen }: { onSeen: () => void }) {
       )}
       <div className="chat-input">
         <textarea
+          spellCheck={true}
           rows={2}
           placeholder="Answer, or tell it anything about what you want to read…"
           value={input}

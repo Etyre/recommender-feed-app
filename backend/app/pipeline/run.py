@@ -59,23 +59,26 @@ def _expire_quests(conn) -> None:
     conn.commit()
 
 
-def _wait_for_network(max_seconds: int = 180) -> None:
-    """launchd fires missed runs the moment the Mac wakes, before Wi-Fi is back. On
-    2026-11-10/11 four runs finished in two seconds with nothing fetched and
-    "ranking: Connection error.", so the feed went most of a day without a re-rank.
-    Wait for the API host to accept a connection; after max_seconds, run anyway."""
-    start = time.time()
-    while True:
+def _wait_for_network(attempts: int = 120) -> bool:
+    """launchd fires missed runs the moment the Mac wakes, before Wi-Fi is back, and also
+    during the short network-less wakes a sleeping Mac makes on its own. Wait for the API host
+    to accept a connection. Returns False if it never did.
+
+    The wait is counted in attempts (about 10s each, so 120 is 20 minutes awake), not in
+    clock time: the clock keeps running while the Mac sleeps, so a 180-second clock limit
+    was already used up when the Mac next woke, and the run went ahead offline (runs 297,
+    300, 301 and 314 in 2026-11: "ranking: Connection error." and no re-rank)."""
+    for attempt in range(attempts):
         try:
             socket.create_connection(("api.anthropic.com", 443), timeout=5).close()
-            if time.time() - start > 1:
-                log(f"network up after {time.time() - start:.0f}s")
-            return
+            if attempt:
+                log(f"network up after {attempt} failed checks")
+            return True
         except OSError as e:
-            if time.time() - start > max_seconds:
-                log(f"[error] no network after {max_seconds}s ({e}); running anyway")
-                return
-            time.sleep(5)
+            if attempt == 0:
+                log(f"no network yet ({e}); waiting")
+            time.sleep(10)
+    return False
 
 
 def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
@@ -147,7 +150,20 @@ def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
             traceback.print_exc()
             sys.stderr.flush()
 
-    _wait_for_network()
+    set_stage("waiting for network")
+    if not _wait_for_network():
+        # Nothing can be fetched, triaged or ranked. Stop here rather than work through the
+        # stages offline; the next scheduled run tries again.
+        msg = "no network after 20 minutes of waiting; nothing was fetched or ranked"
+        conn.execute(
+            """UPDATE pipeline_runs SET status = 'error', finished_at = datetime('now'),
+               stage = 'done', error = ? WHERE id = ?""",
+            (msg, run_id),
+        )
+        conn.commit()
+        conn.close()
+        log(f"[error] run {run_id}: {msg}")
+        return 1
     run_stage("fetch", lambda: fetching.fetch_all_sources(conn, usage, llm_ok))
     run_stage("extract", lambda: extraction.extract_pending(conn))
     if llm_ok:
@@ -163,6 +179,12 @@ def run_pipeline(trigger: str = "scheduled", run_id: int | None = None) -> int:
         for name, fn in llm_stages:
             if contacted:
                 break
+            # The Mac can go back to sleep and wake offline in the middle of a run (run 314:
+            # fetch took 29 minutes, then ranking failed). Three minutes is enough for Wi-Fi.
+            if not _wait_for_network(attempts=18):
+                errors.append(f"{name}: no network")
+                log(f"[error] {name}: no network, stage skipped")
+                continue
             run_stage(name, fn)
     else:
         errors.append(

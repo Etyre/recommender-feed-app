@@ -4,7 +4,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..schemas import SourceIn, SourcePatch
-from ..services.fetching import probe_feed
+from ..services.fetching import canonicalize_url, probe_feed
 from .deps import get_db
 
 router = APIRouter()
@@ -21,10 +21,16 @@ def add_source(body: SourceIn, conn: sqlite3.Connection = Depends(get_db)):
     url = body.url.strip()
     if not url.startswith("http"):
         url = "https://" + url
-    existing = conn.execute("SELECT id FROM sources WHERE url = ?", (url,)).fetchone()
-    if existing:
-        raise HTTPException(409, "source already exists")
+    # Compare ignoring a trailing slash, host case and tracking parameters: "example.com/" and
+    # "example.com" were both accepted (sources 10 and 11 are the same blog fetched twice).
+    existing = {canonicalize_url(r["url"]): r["name"] for r in conn.execute("SELECT name, url FROM sources")}
+    if canonicalize_url(url) in existing:
+        raise HTTPException(409, f"source already exists: {existing[canonicalize_url(url)]}")
     kind, feed_url = probe_feed(url)
+    if feed_url:
+        same_feed = conn.execute("SELECT name FROM sources WHERE feed_url = ?", (feed_url,)).fetchone()
+        if same_feed:
+            raise HTTPException(409, f"that feed is already a source: {same_feed['name']}")
     name = body.name or url.split("//", 1)[-1].split("/", 1)[0]
     cur = conn.execute(
         """INSERT INTO sources (name, kind, url, feed_url, origin, filter_note)

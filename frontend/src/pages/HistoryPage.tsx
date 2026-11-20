@@ -28,6 +28,7 @@ export function HistoryPage() {
     <main>
       <input
         className="history-search"
+        spellCheck={true}
         placeholder="Search your ratings — titles, reading notes, feedback…"
         value={q}
         onChange={(e) => setQ(e.target.value)}

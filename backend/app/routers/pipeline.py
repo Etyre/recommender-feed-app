@@ -1,3 +1,4 @@
+import fcntl
 import json
 import sqlite3
 import subprocess
@@ -5,7 +6,7 @@ import sys
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..config import BACKEND_DIR, LOG_DIR, STALE_RUN_MINUTES
+from ..config import BACKEND_DIR, LOCK_PATH, LOG_DIR, STALE_RUN_MINUTES
 from .deps import get_db
 
 router = APIRouter()
@@ -17,8 +18,33 @@ def _run_dict(row: sqlite3.Row) -> dict:
     return d
 
 
+def _reap_dead_runs(conn: sqlite3.Connection) -> None:
+    """A run that was killed (server restart, reboot, crash) leaves its row 'running', and the
+    UI then shows "running" with Refresh disabled until the next scheduled run tidies up. Every
+    live run holds pipeline.lock, so if the lock is free no run is alive: close such rows now.
+    Rows younger than a minute are left alone (a run just started has not taken the lock yet)."""
+    dead_candidate = conn.execute(
+        "SELECT 1 FROM pipeline_runs WHERE status='running' AND started_at < datetime('now', '-1 minutes')"
+    ).fetchone()
+    if not dead_candidate:
+        return  # the usual case; also keeps this from ever touching the lock while a run starts
+    try:
+        with open(LOCK_PATH, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(f, fcntl.LOCK_UN)
+    except OSError:
+        return  # lock held (a run is alive) or the lock file is unavailable: change nothing
+    conn.execute(
+        """UPDATE pipeline_runs SET status='error', finished_at=datetime('now'),
+           error='stale: interrupted'
+           WHERE status='running' AND started_at < datetime('now', '-1 minutes')"""
+    )
+    conn.commit()
+
+
 @router.post("/pipeline/run", status_code=202)
 def trigger_run(conn: sqlite3.Connection = Depends(get_db)):
+    _reap_dead_runs(conn)
     running = conn.execute(
         f"""SELECT id FROM pipeline_runs WHERE status = 'running'
             AND started_at > datetime('now', '-{STALE_RUN_MINUTES} minutes')"""
@@ -31,13 +57,13 @@ def trigger_run(conn: sqlite3.Connection = Depends(get_db)):
     run_id = cur.lastrowid
     conn.commit()  # the subprocess must see the row
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log = open(LOG_DIR / "manual.log", "ab")
-    subprocess.Popen(
-        [sys.executable, "-m", "app.pipeline", "--trigger", "manual", "--run-id", str(run_id)],
-        cwd=str(BACKEND_DIR),
-        stdout=log,
-        stderr=log,
-    )
+    with open(LOG_DIR / "manual.log", "ab") as log:  # the child keeps its own copy of the handle
+        subprocess.Popen(
+            [sys.executable, "-m", "app.pipeline", "--trigger", "manual", "--run-id", str(run_id)],
+            cwd=str(BACKEND_DIR),
+            stdout=log,
+            stderr=log,
+        )
     return {"run_id": run_id}
 
 
@@ -83,6 +109,7 @@ def usage_daily(days: int = 30, conn: sqlite3.Connection = Depends(get_db)):
 
 @router.get("/pipeline/runs")
 def list_runs(limit: int = 10, conn: sqlite3.Connection = Depends(get_db)):
+    _reap_dead_runs(conn)
     rows = conn.execute(
         "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT ?", (min(limit, 100),)
     ).fetchall()

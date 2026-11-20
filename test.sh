@@ -155,4 +155,73 @@ assert list(mirror.glob("feed-*.db")), "mirror not written"
 print(f"   run {run['id']}: {run['status']}; fetch={stats['fetch']}; items={conn.execute('SELECT COUNT(*) FROM items').fetchone()[0]}")
 print("   ok")
 PYEOF
+echo "== 4. Regression checks on the throwaway database (offline)"
+$PY - <<'PYEOF'
+import sys
+sys.path.insert(0, ".")
+import httpx
+from types import SimpleNamespace
+from anthropic.types import Message
+from app.db import connect
+from app.routers import feed as feed_router, pipeline as pipeline_router
+from app.services import extraction, llm, ranking
+
+conn = connect()
+def item(url, found_by="source_fetch", state="triaged", score=1, published="2020-01-01", content="x", age_days=0):
+    cur = conn.execute(
+        """INSERT INTO items (url, canonical_url, title, found_by, state, triage_score, published_at,
+                              content_text, discovered_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?))""",
+        (url, url, url, found_by, state, score, published, content, f"-{age_days} days"))
+    return cur.lastrowid
+def state(i): return conn.execute("SELECT state FROM items WHERE id = ?", (i,)).fetchone()[0]
+
+# Auto-dismiss takes an old low-scored fetched item, never a link the reader saved.
+fetched, saved = item("https://t.example/fetched"), item("https://t.example/saved", found_by="user")
+ranking.auto_dismiss_stale(conn)
+assert state(fetched) == "dismissed" and state(saved) == "triaged", (state(fetched), state(saved))
+
+# Feed: saved links the latest ranking left out are all listed after it, whatever their state.
+run = conn.execute("INSERT INTO pipeline_runs (trigger, status) VALUES ('manual', 'success')").lastrowid
+ranked = item("https://t.example/ranked", state="shown", score=9)
+conn.execute("INSERT INTO feed_rankings (pipeline_run_id, item_id, rank, score, rationale) VALUES (?, ?, 1, 1, 'r')", (run, ranked))
+once_ranked = item("https://t.example/once-ranked", found_by="user", state="shown")
+opened = item("https://t.example/opened", found_by="user", state="read")
+rated = item("https://t.example/rated", found_by="user", state="read")
+conn.execute("INSERT INTO ratings (item_id, rating) VALUES (?, 'fine')", (rated,))
+ids = [i["id"] for i in feed_router.get_feed(conn)["items"]]
+assert ids[0] == ranked and {saved, once_ranked, opened} <= set(ids[1:]) and rated not in ids, ids
+
+# Extraction: a connection failure leaves a fresh item to be retried; after two days it gives up.
+fresh = item("https://t.example/fresh", state="new", content=None)
+old = item("https://t.example/old", state="new", content=None, age_days=3)
+conn.commit()
+def no_network(*a, **k): raise httpx.ConnectError("offline")
+real_get, extraction.httpx.get = extraction.httpx.get, no_network
+try:
+    extraction.extract_pending(conn)
+finally:
+    extraction.httpx.get = real_get
+got = {r["id"]: r["content_text"] for r in conn.execute("SELECT id, content_text FROM items WHERE id IN (?, ?)", (fresh, old))}
+assert got == {fresh: None, old: ""}, got
+
+# A run row left 'running' by a killed process is closed as soon as anyone looks (the lock is free).
+dead = conn.execute("INSERT INTO pipeline_runs (trigger, status, started_at) VALUES ('manual', 'running', datetime('now', '-5 minutes'))").lastrowid
+just_started = conn.execute("INSERT INTO pipeline_runs (trigger, status) VALUES ('manual', 'running')").lastrowid
+conn.commit()
+runs = {r["id"]: r["status"] for r in pipeline_router.list_runs(limit=5, conn=conn)}
+assert runs[dead] == "error" and runs[just_started] == "running", runs
+
+# A text reply cut off at max_tokens is an error, not an answer (it could be a taste profile).
+cut = Message.model_validate({"id": "m", "type": "message", "role": "assistant", "model": "fake-model",
+    "content": [{"type": "text", "text": "# Taste profile\n## Strong inter"}], "stop_reason": "max_tokens",
+    "stop_sequence": None, "usage": {"input_tokens": 1, "output_tokens": 1}})
+llm.get_client = lambda: SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: cut))
+try:
+    llm.generate_text(model="fake-model", system="S", user_content="x")
+    raise AssertionError("truncated reply was returned")
+except ValueError as e:
+    assert "truncated" in str(e)
+print("   ok")
+PYEOF
 echo "PASS"
